@@ -20,9 +20,9 @@ services:
     asn: [396982]
     domains: []
 
-  meta:              # Facebook, Instagram, WhatsApp, Messenger
+  meta:              # Facebook, Instagram, WhatsApp, Messenger, Threads
     enabled: true
-    asn: [32934]
+    asn: [32934, 54115]
     domains: [facebook.com, fb.com, fbcdn.net, messenger.com, instagram.com, cdninstagram.com, whatsapp.com, whatsapp.net, wa.me, threads.net, threads.com]
 
   x_twitter:
@@ -173,6 +173,11 @@ services:
     enabled: false
     asn: []
     domains: [medium.com]
+
+  wordpress:         # WordPress.com и блоги на нём
+    enabled: true
+    asn: [2635]
+    domains: [wordpress.com, wp.com]
 
   reddit:
     enabled: true
