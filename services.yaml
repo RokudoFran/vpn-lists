@@ -1,0 +1,195 @@
+# Список сервисов для сборщика vpn_only
+# asn     -> сборщик в GitHub Actions тянет префиксы из RIPEstat
+# domains -> генерируются DNS FWD-записи с address-list на MikroTik
+# enabled: false -> сервис описан, но в сборку не идёт
+# ASN перед первым коммитом сверь на bgp.he.net
+
+services:
+
+  # ===== Заблокированы в РФ =====
+
+  google:            # весь Google: поиск, YouTube, Gmail, Play, Gemini, Drive, Maps
+    enabled: true
+    asn: [15169, 36040, 43515, 19527]   # Google, YouTube
+    domains: [google.com, google.ru, googleapis.com, gstatic.com, googleusercontent.com, gvt1.com, gvt2.com,
+              youtube.com, youtu.be, googlevideo.com, ytimg.com, ggpht.com,
+              gmail.com, android.com, googleplay.com, gemini.google.com, withgoogle.com, goo.gl, g.co]
+
+  google_cloud:      # AS клиентов GCP: чужие сервисы (Discord voice, Snapchat и др.)
+    enabled: false
+    asn: [396982]
+    domains: []
+
+  meta:              # Facebook, Instagram, WhatsApp, Messenger
+    enabled: true
+    asn: [32934]
+    domains: [facebook.com, fb.com, fbcdn.net, messenger.com, instagram.com, cdninstagram.com, whatsapp.com, whatsapp.net, wa.me, threads.net, threads.com]
+
+  x_twitter:
+    enabled: true
+    asn: [13414, 35995]
+    domains: [x.com, twitter.com, twimg.com, t.co]
+
+  telegram:
+    enabled: true
+    asn: [62041, 59930, 62014, 44907, 211157]
+    domains: [telegram.org, t.me, telegram.me, telesco.pe, tdesktop.com]
+
+  linkedin:
+    enabled: true
+    asn: [14413]
+    domains: [linkedin.com, licdn.com]
+
+  discord:           # своей AS нет: Cloudflare + Google Cloud
+    enabled: true
+    asn: []
+    domains: [discord.com, discord.gg, discordapp.com, discordapp.net, discord.media, discordcdn.com, discord.dev]
+
+  viber:
+    enabled: true
+    asn: []
+    domains: [viber.com]
+
+  signal:
+    enabled: true
+    asn: []
+    domains: [signal.org, whispersystems.org, signal.art]
+
+  snapchat:
+    enabled: true
+    asn: []
+    domains: [snapchat.com, snap.com, sc-cdn.net, snapkit.com]
+
+  facetime:          # только домен; всю Apple (AS714) через VPN не гоняем
+    enabled: true
+    asn: []
+    domains: [facetime.apple.com]
+
+  patreon:
+    enabled: true
+    asn: []
+    domains: [patreon.com, patreonusercontent.com]
+
+  soundcloud:
+    enabled: true
+    asn: []
+    domains: [soundcloud.com, sndcdn.com]
+
+  proton:
+    enabled: true
+    asn: []
+    domains: [proton.me, protonmail.com, protonvpn.com]
+
+  # ===== Сами закрыли доступ из РФ =====
+
+  openai:
+    enabled: true
+    asn: []
+    domains: [openai.com, chatgpt.com, oaistatic.com, oaiusercontent.com, sora.com]
+
+  anthropic:
+    enabled: true
+    asn: []
+    domains: [claude.ai, claude.com, anthropic.com, claudeusercontent.com]
+
+  xai_grok:
+    enabled: true
+    asn: []
+    domains: [x.ai, grok.com]
+
+  microsoft_copilot:
+    enabled: true
+    asn: []
+    domains: [copilot.microsoft.com, githubcopilot.com]
+
+  spotify:
+    enabled: true
+    asn: []
+    domains: [spotify.com, scdn.co, spotifycdn.com]
+
+  netflix:
+    enabled: true
+    asn: [2906]
+    domains: [netflix.com, nflxvideo.net, nflximg.net, nflxext.com, nflxso.net]
+
+  canva:
+    enabled: true
+    asn: []
+    domains: [canva.com]
+
+  notion:
+    enabled: true
+    asn: []
+    domains: [notion.so, notion.site]
+
+  tinder:
+    enabled: false
+    asn: []
+    domains: [tinder.com, gotinder.com]
+
+  # ===== Для сисадмина =====
+
+  docker_hub:
+    enabled: true
+    asn: []
+    domains: [docker.com, docker.io]
+
+  hashicorp:
+    enabled: true
+    asn: []
+    domains: [hashicorp.com, terraform.io]
+
+  github_raw:        # чтобы fetch списка не падал при перебоях
+    enabled: true
+    asn: []
+    domains: [raw.githubusercontent.com]
+
+  roblox:
+    enabled: true
+    asn: []
+    domains: [roblox.com, rbxcdn.com, rbxtrk.com, roblox.cn]
+
+  tor:
+    enabled: true
+    asn: []
+    domains: [torproject.org]
+
+  jetbrains:         # аккаунты/лицензии/плагины режут РФ — проверь у себя
+    enabled: true
+    asn: []
+    domains: [jetbrains.com, jb.gg]
+
+  ai_misc:           # не уверен в гео-блоке — включай, если не открывается
+    enabled: false
+    asn: []
+    domains: [perplexity.ai, cursor.com, cursor.sh, midjourney.com]
+
+  vendor_drivers:    # драйверы/прошивки, иногда режут загрузки из РФ
+    enabled: false
+    asn: []
+    domains: [intel.com, amd.com, broadcom.com, cisco.com]
+
+  medium:
+    enabled: false
+    asn: []
+    domains: [medium.com]
+
+  # ===== Опционально, тяжёлые =====
+
+  cloudflare:        # огромная AS, много российских сайтов за ней
+    enabled: false
+    asn: [13335]
+    domains: []
+
+  tiktok:            # работает с перебоями
+    enabled: false
+    asn: []
+    domains: [tiktok.com, tiktokcdn.com, tiktokv.com]
+
+# ===== Никогда не через VPN =====
+# Отдельный address-list no_vpn; правило mangle с ним ставится ВЫШЕ правила vpn_only.
+# Российские сервисы часто блокируют зарубежные IP.
+no_vpn:
+  domains: [gosuslugi.ru, mos.ru, nalog.gov.ru, sberbank.ru, online.sberbank.ru, tbank.ru,
+            vtb.ru, alfabank.ru, ozon.ru, wildberries.ru, avito.ru, yandex.ru, ya.ru,
+            vk.com, vk.ru, max.ru, samokat.ru]
