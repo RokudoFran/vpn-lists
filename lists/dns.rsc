@@ -62,6 +62,11 @@
 :do {/ip dns static add name=raw.githubusercontent.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=rbxcdn.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=rbxtrk.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
+:do {/ip dns static add name=redd.it type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
+:do {/ip dns static add name=reddit.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
+:do {/ip dns static add name=redditinc.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
+:do {/ip dns static add name=redditmedia.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
+:do {/ip dns static add name=redditstatic.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=roblox.cn type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=roblox.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=sc-cdn.net type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
