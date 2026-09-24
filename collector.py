@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Собирает IP-префиксы по services.yaml + manual.txt и готовит .rsc для MikroTik."""
-import ipaddress, json, pathlib, sys, time, urllib.request
+import hashlib, ipaddress, json, pathlib, sys, time, urllib.request
 import yaml
 
 VPN_DNS = "8.8.8.8"      # DNS для заблокированных доменов (сам идёт через туннель)
@@ -97,6 +97,10 @@ def main():
         dns.append(f":do {{/ip dns static add name={d} type=FWD forward-to={DIRECT_DNS} "
                    f"match-subdomain=yes address-list=no_vpn comment=git-dns}} on-error={{}}")
     (out / "dns.rsc").write_text("\n".join(dns) + "\n")
+
+    # Версия списков: роутер импортирует только когда она меняется
+    h = hashlib.sha256((out / "vpn_ipv4.rsc").read_bytes() + (out / "dns.rsc").read_bytes()).hexdigest()
+    (out / "version.txt").write_text(h + "\n")
 
     # Отчёт: чьи подсети остались непонятными в manual.txt
     rep = pathlib.Path("reports"); rep.mkdir(exist_ok=True)
