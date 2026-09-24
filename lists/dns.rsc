@@ -99,6 +99,8 @@
 :do {/ip dns static add name=whatsapp.net type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=whispersystems.org type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=withgoogle.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
+:do {/ip dns static add name=wordpress.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
+:do {/ip dns static add name=wp.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=x.ai type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=x.com type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
 :do {/ip dns static add name=youtu.be type=FWD forward-to=8.8.8.8 match-subdomain=yes address-list=vpn_only comment=git-dns} on-error={}
