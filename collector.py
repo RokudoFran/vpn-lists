@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Собирает IP-префиксы по services.yaml + manual.txt и готовит .rsc для MikroTik."""
+"""Собирает IP-префиксы и домены по services.yaml + manual.txt в простые текстовые списки."""
 import hashlib, ipaddress, json, pathlib, sys, time, urllib.request
 import yaml
 
-VPN_DNS = "8.8.8.8"      # DNS для заблокированных доменов (сам идёт через туннель)
-DIRECT_DNS = "77.88.8.8" # DNS для no_vpn доменов (напрямую)
 MIN_PREFIXES = 50        # защита: если собралось меньше — ничего не коммитим
 RIPE_ASN = "https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS{}"
 RIPE_WHO = "https://stat.ripe.net/data/prefix-overview/data.json?resource={}"
@@ -82,24 +80,22 @@ def main():
     vpn_domains = sorted(set(vpn_domains))
     direct_domains = sorted(set((cfg.get("no_vpn") or {}).get("domains") or []))
 
+    # Только данные, никаких команд: роутер сам их читает и проверяет
     out = pathlib.Path("lists"); out.mkdir(exist_ok=True)
-    (out / "vpn_ipv4.txt").write_text("".join(f"{n}\n" for n in nets))
-    al = ["/ip firewall address-list remove [find list=vpn_only comment=git]"]
-    al += [f":do {{/ip firewall address-list add list=vpn_only comment=git address={n}}} on-error={{}}"
-           for n in nets]
-    (out / "vpn_ipv4.rsc").write_text("\n".join(al) + "\n")
+    for old in ("vpn_ipv4.rsc", "dns.rsc"):
+        (out / old).unlink(missing_ok=True)
+    # /32 пишем без маски — RouterOS хранит одиночные адреса именно так
+    fmt = lambda n: str(n.network_address) if n.prefixlen == 32 else str(n)
+    files = {
+        "vpn_ipv4.txt": [fmt(n) for n in nets],
+        "domains_vpn.txt": vpn_domains,
+        "domains_direct.txt": direct_domains,
+    }
+    for name, items in files.items():
+        (out / name).write_text("".join(f"{x}\n" for x in items))
 
-    dns = ["/ip dns static remove [find comment=git-dns]"]
-    for d in vpn_domains:
-        dns.append(f":do {{/ip dns static add name={d} type=FWD forward-to={VPN_DNS} "
-                   f"match-subdomain=yes address-list=vpn_only comment=git-dns}} on-error={{}}")
-    for d in direct_domains:
-        dns.append(f":do {{/ip dns static add name={d} type=FWD forward-to={DIRECT_DNS} "
-                   f"match-subdomain=yes address-list=no_vpn comment=git-dns}} on-error={{}}")
-    (out / "dns.rsc").write_text("\n".join(dns) + "\n")
-
-    # Версия списков: роутер импортирует только когда она меняется
-    h = hashlib.sha256((out / "vpn_ipv4.rsc").read_bytes() + (out / "dns.rsc").read_bytes()).hexdigest()
+    # Версия списков: роутер обновляется только когда она меняется
+    h = hashlib.sha256(b"".join((out / n).read_bytes() for n in files)).hexdigest()
     (out / "version.txt").write_text(h + "\n")
 
     # Отчёт: чьи подсети остались непонятными в manual.txt
