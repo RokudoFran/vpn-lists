@@ -174,11 +174,40 @@ services:
     asn: []
     domains: [medium.com]
 
-  # ===== Опционально, тяжёлые =====
+  reddit:
+    enabled: true
+    asn: []
+    domains: [reddit.com, redd.it, redditmedia.com, redditstatic.com, redditinc.com]
 
-  cloudflare:        # огромная AS, много российских сайтов за ней
+  # ===== CDN (на ac2 шли через VPN целиком) =====
+  # sources — официальные списки IP от самих компаний
+
+  cloudflare:
+    enabled: true
+    asn: []
+    sources: [cloudflare]
+    domains: []
+
+  aws_cloudfront:
+    enabled: true
+    asn: []
+    sources: [cloudfront]
+    domains: []
+
+  akamai:
+    enabled: true
+    asn: [20940, 16625]
+    domains: []
+
+  gcore:
+    enabled: true
+    asn: [199524]
+    domains: []
+
+  fastly:            # весь Fastly (GitHub raw, Reddit и др.) — пока выключен
     enabled: false
-    asn: [13335]
+    asn: []
+    sources: [fastly]
     domains: []
 
   tiktok:            # работает с перебоями
