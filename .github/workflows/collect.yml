@@ -5,7 +5,7 @@ on:
     - cron: "0 1 * * *"      # каждый день в 04:00 МСК
   workflow_dispatch:         # кнопка ручного запуска
   push:
-    paths: [services.yaml, collector.py, manual.txt]
+    paths: [services.yaml, collector.py, manual.txt, .github/workflows/collect.yml]
 
 permissions:
   contents: write
@@ -26,4 +26,5 @@ jobs:
           git config user.email "list-bot@users.noreply.github.com"
           git add lists reports
           git diff --cached --quiet || git commit -m "update lists $(date -u +%F)"
+          git pull --rebase
           git push
