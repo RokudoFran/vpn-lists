@@ -1,6 +1,6 @@
 # Подсети из manual.txt, которые не покрыты автосбором
 
-Всего: 25
+Всего: 27
 
 | Подсеть | Чья (AS и владелец) |
 |---|---|
@@ -29,3 +29,5 @@
 | 213.183.46.0/24 | AS56630 MELBICOM-EU-AS Melbikomas UAB |
 | 46.166.185.165/32 | AS43350 NFORCE NForce Entertainment B.V. |
 | 199.232.174.217/32 | AS54113 FASTLY - Fastly, Inc. |
+| 160.79.104.0/23 | AS399358 ANTHROPIC - Anthropic, PBC |
+| 209.249.57.0/24 | AS60808 AP-2440-60808 - Anthropic, |

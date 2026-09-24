@@ -622,6 +622,7 @@
 :do {/ip firewall address-list add list=vpn_only comment=git address=157.240.0.0/17} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=157.240.192.0/18} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=158.62.206.0/23} on-error={}
+:do {/ip firewall address-list add list=vpn_only comment=git address=160.79.104.0/23} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=162.33.20.0/24} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=162.120.2.0/23} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=162.120.128.0/17} on-error={}
@@ -833,6 +834,7 @@
 :do {/ip firewall address-list add list=vpn_only comment=git address=209.102.248.0/23} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=209.102.251.0/24} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=209.102.252.0/22} on-error={}
+:do {/ip firewall address-list add list=vpn_only comment=git address=209.249.57.0/24} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=210.61.248.0/23} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=213.156.138.0/24} on-error={}
 :do {/ip firewall address-list add list=vpn_only comment=git address=213.156.140.0/24} on-error={}
