@@ -65,6 +65,10 @@ def main():
             got = v4(SOURCES[src]())
             print(f"{name}: {src} -> {len(got)} префиксов")
             auto += got
+        fixed = v4(s.get("prefixes") or [])
+        if fixed:
+            print(f"{name}: prefixes -> {len(fixed)} префиксов")
+            auto += fixed
         vpn_domains += s.get("domains") or []
     auto = list(ipaddress.collapse_addresses(auto))
 

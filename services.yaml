@@ -40,9 +40,10 @@ services:
     asn: [14413]
     domains: [linkedin.com, licdn.com]
 
-  discord:           # своей AS нет: Cloudflare + Google Cloud
+  discord:           # своей AS нет: сайт на Cloudflare, голос на i3D.net и Google Cloud
     enabled: true
     asn: []
+    prefixes: [66.22.192.0/18]   # собственный блок Discord Inc: голосовые серверы
     domains: [discord.com, discord.gg, discordapp.com, discordapp.net, discord.media, discordcdn.com, discord.dev]
 
   viber:
