@@ -21,7 +21,6 @@ facetime.apple.com
 fb.com
 fbcdn.net
 g.co
-gemini.google.com
 ggpht.com
 githubcopilot.com
 gmail.com
@@ -48,6 +47,7 @@ nflxext.com
 nflximg.net
 nflxso.net
 nflxvideo.net
+notion.com
 notion.site
 notion.so
 oaistatic.com

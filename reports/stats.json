@@ -1,0 +1,33 @@
+{
+  "addresses": 23310672,
+  "direct_domains": 34,
+  "prefixes": 862,
+  "sources": {
+    "akamai:AS16625": 1868,
+    "akamai:AS20940": 3963,
+    "anthropic:AS399358": 1,
+    "anthropic:AS60808": 1,
+    "aws_cloudfront:cloudfront": 211,
+    "cloudflare:cloudflare": 15,
+    "discord:prefixes": 1,
+    "gcore:AS199524": 465,
+    "google:AS15169": 1234,
+    "google:AS19527": 244,
+    "google:AS36040": 85,
+    "google:AS43515": 190,
+    "linkedin:AS14413": 25,
+    "meta:AS32934": 239,
+    "meta:AS54115": 11,
+    "netflix:AS2906": 249,
+    "roblox:AS22697": 49,
+    "telegram:AS211157": 2,
+    "telegram:AS44907": 2,
+    "telegram:AS59930": 2,
+    "telegram:AS62014": 7,
+    "telegram:AS62041": 24,
+    "wordpress:AS2635": 155,
+    "x_twitter:AS13414": 26,
+    "x_twitter:AS35995": 6
+  },
+  "vpn_domains": 107
+}

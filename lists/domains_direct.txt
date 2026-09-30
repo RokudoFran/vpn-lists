@@ -1,7 +1,6 @@
 alfabank.ru
 avito.ru
 delivery.mp.microsoft.com
-dl.delivery.mp.microsoft.com
 epicgames-download1.akamaized.net
 gosuslugi.ru
 ivi.ru
@@ -12,7 +11,6 @@ max.ru
 mos.ru
 nalog.gov.ru
 okko.tv
-online.sberbank.ru
 ozon.ru
 premier.one
 rutube.ru
