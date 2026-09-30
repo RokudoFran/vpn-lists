@@ -1,7 +1,10 @@
 # Список сервисов для сборщика vpn_only
-# asn     -> сборщик в GitHub Actions тянет префиксы из RIPEstat
-# domains -> генерируются DNS FWD-записи с address-list на MikroTik
-# enabled: false -> сервис описан, но в сборку не идёт
+# asn      -> сборщик в GitHub Actions тянет префиксы из RIPEstat
+# sources  -> официальные списки IP самих компаний (cloudflare, cloudfront, fastly)
+# prefixes -> свои подсети сервиса, если своей AS нет (проверяются строго, как manual.txt)
+# domains  -> попадают в lists/domains_vpn.txt, роутер сам делает из них FWD-записи с address-list
+# enabled: true/false -> обязателен; false = сервис описан, но в сборку не идёт
+# Других ключей нет: опечатка (domain:, enable:) остановит сборку, а не пропустит сервис молча.
 # ASN перед первым коммитом сверь на bgp.he.net
 
 services:
@@ -13,7 +16,7 @@ services:
     asn: [15169, 36040, 43515, 19527]   # Google, YouTube
     domains: [google.com, google.ru, googleapis.com, gstatic.com, googleusercontent.com, gvt1.com, gvt2.com,
               youtube.com, youtu.be, googlevideo.com, ytimg.com, ggpht.com,
-              gmail.com, android.com, googleplay.com, gemini.google.com, withgoogle.com, goo.gl, g.co]
+              gmail.com, android.com, googleplay.com, withgoogle.com, goo.gl, g.co]   # gemini.google.com покрыт google.com
 
   google_cloud:      # AS клиентов GCP: чужие сервисы (Discord voice, Snapchat и др.)
     enabled: false
@@ -88,9 +91,9 @@ services:
     asn: []
     domains: [openai.com, chatgpt.com, oaistatic.com, oaiusercontent.com, sora.com]
 
-  anthropic:
+  anthropic:         # AS перенесены из manual.txt: отчёт RIPEstat показал владельца Anthropic
     enabled: true
-    asn: []
+    asn: [399358, 60808]
     domains: [claude.ai, claude.com, anthropic.com, claudeusercontent.com]
 
   xai_grok:
@@ -118,10 +121,10 @@ services:
     asn: []
     domains: [canva.com]
 
-  notion:
+  notion:            # основной сайт переехал на notion.com
     enabled: true
     asn: []
-    domains: [notion.so, notion.site]
+    domains: [notion.so, notion.site, notion.com]
 
   tinder:
     enabled: false
@@ -140,7 +143,7 @@ services:
     asn: []
     domains: [hashicorp.com, terraform.io]
 
-  github_raw:        # чтобы fetch списка не падал при перебоях
+  github_raw:        # роутер качает списки через туннель (правило mangle vpn:router-own)
     enabled: true
     asn: []
     domains: [raw.githubusercontent.com]
@@ -222,14 +225,15 @@ services:
     domains: [tiktok.com, tiktokcdn.com, tiktokv.com]
 
 # ===== Никогда не через VPN =====
-# Отдельный address-list no_vpn; правило mangle с ним ставится ВЫШЕ правила vpn_only.
-# Российские сервисы часто блокируют зарубежные IP.
+# Отдельный address-list no_vpn; правило mangle с ним стоит ВЫШЕ правил vpn_git/vpn_dns
+# и срабатывает только на новые соединения. Российские сервисы часто блокируют зарубежные IP.
+# Поддомены указывать не нужно: FWD-записи на роутере с match-subdomain.
 no_vpn:
-  domains: [gosuslugi.ru, mos.ru, nalog.gov.ru, sberbank.ru, online.sberbank.ru, tbank.ru,
+  domains: [gosuslugi.ru, mos.ru, nalog.gov.ru, sberbank.ru, tbank.ru,
             vtb.ru, alfabank.ru, ozon.ru, wildberries.ru, avito.ru, yandex.ru, ya.ru, yandex.net,
             vk.com, vk.ru, vkvideo.ru, userapi.com, mail.ru, max.ru, samokat.ru,
             # российское видео: блокирует зарубежные IP
             kinopoisk.ru, ivi.ru, okko.tv, rutube.ru, wink.ru, kion.ru, premier.one,
             # тяжёлые загрузки: незаблокированы, а через VPS только медленнее
             steamcontent.com, steamserver.net, windowsupdate.com, delivery.mp.microsoft.com,
-            dl.delivery.mp.microsoft.com, swcdn.apple.com, updates.cdn-apple.com, epicgames-download1.akamaized.net]
+            swcdn.apple.com, updates.cdn-apple.com, epicgames-download1.akamaized.net]
