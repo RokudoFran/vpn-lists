@@ -1,0 +1,15 @@
+# Раз в месяц ищет новые версии GitHub Actions. Подходящие PR сливает сам
+# workflow dependabot-automerge.yml после прогона тестов на новых версиях.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    allow:
+      - dependency-name: "actions/*"   # только Actions от самого GitHub
+    cooldown:
+      default-days: 7                  # свежий релиз ждёт неделю: если с ним что-то не так, его успеют отозвать
+    groups:
+      actions:
+        patterns: ["*"]                # все обновления одним PR
