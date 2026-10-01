@@ -48,6 +48,7 @@ class Repo:
         (self.base / "manual.txt").write_text(manual, encoding="utf-8")
         self.asn = {64500: list(ASN_NETS), 64511: ["45.201.0.0/22"]}
         self.cf = list(CF_NETS)
+        self.dns = {}                                        # домен -> ответ DoH, по умолчанию ok
 
     def run(self, *args, force=False):
         env = {"FORCE": "1"} if force else {}
@@ -55,6 +56,7 @@ class Repo:
         with mock.patch.object(collector, "asn_prefixes", lambda asn: self.asn[asn]), \
              mock.patch.dict(collector.SOURCES, {"cloudflare": lambda: self.cf}), \
              mock.patch.object(collector, "whois", lambda net: "AS0 TEST"), \
+             mock.patch.object(collector, "domain_status", lambda d: self.dns.get(d, "ok")), \
              mock.patch.object(collector.time, "sleep", lambda s: None), \
              mock.patch.dict(os.environ, env, clear=False), \
              contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -228,6 +230,45 @@ class CollectorTest(unittest.TestCase):
         self.assertIn("| 45.61.0.0/16 | половина | 50% | AS0 TEST |", report)
         self.assertIn("| 45.5.1.0/24 | целиком внутри AS | 100% | — |", report)
         self.assertFalse((self.repo.base / "reports/leftover.md").exists())
+
+    def test_sources_report_and_volumes(self):
+        self.repo.run()
+        stats = json.loads(self.repo.read("reports/stats.json"))
+        self.assertEqual(stats["addresses_by_source"], {"alpha:AS64500": 60 * 256, "beta:cloudflare": 40 * 65536})
+        rows = [l for l in self.repo.read("reports/sources.md").splitlines() if l.startswith("| ")][1:]
+        self.assertTrue(rows[0].startswith("| beta:cloudflare | 40 | 2 621 440 |"), rows[0])
+        self.assertTrue(rows[1].startswith("| alpha:AS64500 | 60 | 15 360 |"), rows[1])
+        self.assertIn("manual.txt (не покрыто автосбором)", rows[2])
+        self.assertTrue(rows[-1].startswith("| **Итого в vpn_ipv4.txt** |"))
+
+    def test_volume_overlap_inside_source_is_not_double_counted(self):
+        self.repo.asn[64500] = ASN_NETS + ["45.1.1.0/25"]     # кусок уже анонсированной /24
+        self.repo.run()
+        stats = json.loads(self.repo.read("reports/stats.json"))
+        self.assertEqual(stats["sources"]["alpha:AS64500"], 61)
+        self.assertEqual(stats["addresses_by_source"]["alpha:AS64500"], 60 * 256)
+
+    def test_dead_domain_is_reported_but_build_continues(self):
+        self.repo.dns = {"svc3.com": "nxdomain", "bank.ru": "servfail"}
+        out = self.repo.run()
+        report = self.repo.read("reports/domains.md")
+        self.assertIn("| svc3.com | VPN | не существует (NXDOMAIN) |", report)
+        self.assertIn("| bank.ru | no_vpn | ошибка DNS (SERVFAIL) |", report)
+        self.assertIn("проблемных 2", report)
+        self.assertIn("svc3.com", self.repo.read("lists/domains_vpn.txt"), "отчёт не меняет списки")
+        self.assertIn("ВНИМАНИЕ: домен svc3.com", out)
+
+    def test_doh_outage_is_not_reported_as_dead_domains(self):
+        self.repo.dns = {d: "error" for d in VPN_DOMAINS + DIRECT_DOMAINS}
+        self.repo.run()
+        report = self.repo.read("reports/domains.md")
+        self.assertIn("Проверка не удалась", report)
+        self.assertNotIn("| svc1.com |", report)
+
+    def test_all_domains_fine(self):
+        self.repo.run()
+        self.assertIn(f"Проверено {len(VPN_DOMAINS) + len(DIRECT_DOMAINS)}, проблемных 0.",
+                      self.repo.read("reports/domains.md"))
 
     def test_check_mode_needs_no_network(self):
         with mock.patch.object(collector, "get", side_effect=AssertionError("сеть в --check")):

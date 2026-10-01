@@ -195,6 +195,7 @@ services:
     enabled: true
     asn: []
     sources: [cloudflare]
+    prefixes: [8.6.112.0/24]   # тоже Cloudflare (AS13335), но нет в официальном списке
     domains: []
 
   aws_cloudfront:

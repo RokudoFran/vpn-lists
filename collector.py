@@ -7,7 +7,7 @@
 
 Пока не пройдены все проверки, ничего не пишется: обновляется либо всё, либо ничего.
 """
-import hashlib, ipaddress, json, os, pathlib, re, sys, time, urllib.request
+import concurrent.futures, hashlib, ipaddress, json, os, pathlib, re, sys, time, urllib.request
 
 import yaml
 
@@ -25,6 +25,7 @@ SOURCE_MIN_PREFIXLEN = 8   # шире /8 из внешнего источник�
 
 RIPE_ASN = "https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS{}&sourceapp=vpn-lists"
 RIPE_WHO = "https://stat.ripe.net/data/prefix-overview/data.json?resource={}&sourceapp=vpn-lists"
+DOH = "https://dns.google/resolve?name={}&type=A"
 SERVICE_KEYS = {"enabled", "asn", "sources", "prefixes", "domains"}
 # Строчная латиница, цифры и дефисы, минимум одна точка. Кириллические домены — в виде xn--.
 DOMAIN_RE = re.compile(r"^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
@@ -75,6 +76,29 @@ def whois(net):
     if asns:
         return ", ".join(f"AS{a['asn']} {a['holder']}" for a in asns)
     return "не анонсируется (никто не маршрутизирует)"
+
+
+def domain_status(domain):
+    """Существует ли домен: ok (есть записи или NODATA), nxdomain, servfail или error (DoH не ответил)."""
+    for attempt in range(2):
+        try:
+            req = urllib.request.Request(DOH.format(domain), headers={"User-Agent": "vpn-lists-collector",
+                                                                      "Accept": "application/dns-json"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                status = json.loads(r.read().decode("utf-8")).get("Status")
+            return {0: "ok", 3: "nxdomain"}.get(status, "servfail")
+        except Exception:
+            if attempt == 0:
+                time.sleep(2)
+    return "error"
+
+
+def warn(msg):
+    """Предупреждение: в Actions — жёлтой плашкой в интерфейсе, локально — в stderr."""
+    if os.environ.get("GITHUB_ACTIONS"):
+        print("::warning::" + msg)
+    else:
+        print("ВНИМАНИЕ: " + msg, file=sys.stderr)
 
 
 # ---- Разбор -----------------------------------------------------------------
@@ -215,27 +239,26 @@ def build_domains(cfg):
 
 # ---- Сбор и проверки --------------------------------------------------------
 def collect(cfg):
-    """Префиксы всех включённых сервисов -> (подсети, {источник: число префиксов})."""
-    nets, stats = [], {}
+    """Префиксы всех включённых сервисов -> (подсети, {источник: префиксов}, {источник: адресов})."""
+    nets, stats, volumes = [], {}, {}
+    def add(key, got):
+        stats[key] = len(got)
+        volumes[key] = sum(n.num_addresses for n in ipaddress.collapse_addresses(got))
+        nets.extend(got)
     for name, s in cfg["services"].items():
         if not s["enabled"]:
             continue
         for asn in s.get("asn") or []:
-            got = parse_source(asn_prefixes(asn), f"{name}: AS{asn}")
-            stats[f"{name}:AS{asn}"] = len(got)
-            nets += got
+            add(f"{name}:AS{asn}", parse_source(asn_prefixes(asn), f"{name}: AS{asn}"))
         for src in s.get("sources") or []:
-            got = parse_source(SOURCES[src](), f"{name}: {src}")
-            stats[f"{name}:{src}"] = len(got)
-            nets += got
+            add(f"{name}:{src}", parse_source(SOURCES[src](), f"{name}: {src}"))
         if s["prefixes"]:
-            stats[f"{name}:prefixes"] = len(s["prefixes"])
-            nets += s["prefixes"]
+            add(f"{name}:prefixes", list(s["prefixes"]))
     for key, n in stats.items():
         print(f"{key} -> {n} префиксов")
         if n == 0:
-            print(f"ВНИМАНИЕ: {key} не дал ни одного префикса", file=sys.stderr)
-    return nets, stats
+            warn(f"{key} не дал ни одного префикса")
+    return nets, stats, volumes
 
 
 def read_previous(lists_dir, reports_dir):
@@ -320,6 +343,56 @@ def manual_report(manual, auto):
     return "\n".join(lines) + "\n"
 
 
+def fmt_num(n):
+    return f"{n:,}".replace(",", " ")
+
+
+def fmt_pct(x):
+    if 0 < x < 0.001:
+        return "<0.1%"
+    return f"{x:.1%}" if x < 0.1 else f"{x:.0%}"
+
+
+def sources_report(stats, volumes, leftover, nets):
+    total = sum(n.num_addresses for n in nets)
+    lines = ["# Источники подсетей", "",
+             "Сколько адресов даёт каждый источник. Источники могут пересекаться, поэтому доли в сумме "
+             "бывают больше 100%.", "",
+             "| Источник | Префиксов | Адресов | Доля итога |", "|---|---|---|---|"]
+    for key, vol in sorted(volumes.items(), key=lambda kv: (-kv[1], kv[0])):
+        lines.append(f"| {key} | {stats[key]} | {fmt_num(vol)} | {fmt_pct(vol / total)} |")
+    if leftover:
+        vol = sum(n.num_addresses for n in ipaddress.collapse_addresses(leftover))
+        lines.append(f"| manual.txt (не покрыто автосбором) | {len(leftover)} | {fmt_num(vol)} | {fmt_pct(vol / total)} |")
+    lines.append(f"| **Итого в vpn_ipv4.txt** | {len(nets)} | {fmt_num(total)} | 100% |")
+    return "\n".join(lines) + "\n"
+
+
+def check_domains(vpn_domains, direct_domains):
+    """Существуют ли домены (DoH). Только отчёт и предупреждения: сборку не останавливает."""
+    names = [(d, "VPN") for d in vpn_domains] + [(d, "no_vpn") for d in direct_domains]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        statuses = list(pool.map(domain_status, [d for d, _ in names]))
+    lines = ["# Проверка доменов", "",
+             "Каждый домен из lists/domains_*.txt проверяется через DNS (DoH Google). Несуществующий домен — "
+             "опечатка или сервис переехал: на роутере такая запись ничего не делает.", ""]
+    errors = statuses.count("error")
+    if errors > len(names) / 2:
+        warn(f"проверка доменов не удалась: DoH не ответил для {errors} из {len(names)}")
+        lines.append(f"Проверка не удалась: DoH не ответил для {errors} из {len(names)} доменов.")
+        return "\n".join(lines) + "\n"
+    labels = {"nxdomain": "не существует (NXDOMAIN)", "servfail": "ошибка DNS (SERVFAIL)",
+              "error": "не удалось проверить"}
+    bad = [(d, lst, labels[st]) for (d, lst), st in zip(names, statuses) if st != "ok"]
+    lines.append(f"Проверено {len(names)}, проблемных {len(bad)}.")
+    if bad:
+        lines += ["", "| Домен | Список | Результат |", "|---|---|---|"]
+        lines += [f"| {d} | {lst} | {res} |" for d, lst, res in bad]
+        for d, lst, res in bad:
+            warn(f"домен {d} ({lst}): {res}")
+    return "\n".join(lines) + "\n"
+
+
 def write(path, text):
     """Через временный файл: либо старое содержимое, либо новое целиком. Всегда UTF-8 и LF."""
     tmp = path.with_name(path.name + ".tmp")
@@ -344,7 +417,7 @@ def main(argv=None, base=ROOT):
         return
 
     # 2. Сбор
-    auto, stats = collect(cfg)
+    auto, stats, volumes = collect(cfg)
     auto = list(ipaddress.collapse_addresses(auto))
     leftover = [n for n, _ in manual if not any(n.subnet_of(a) for a in auto)]
     print(f"manual.txt: {len(manual)} записей, из них не покрыто автосбором целиком: {len(leftover)}")
@@ -355,6 +428,8 @@ def main(argv=None, base=ROOT):
            "vpn_domains": len(vpn_domains), "direct_domains": len(direct_domains)}
     check_lists(read_previous(lists_dir, reports_dir), new, stats, force)
     report = manual_report(manual, auto)
+    sources_md = sources_report(stats, volumes, leftover, nets)
+    domains_md = check_domains(vpn_domains, direct_domains)
 
     # 4. Запись: только данные, никаких команд — роутер сам их читает и проверяет
     lists_dir.mkdir(exist_ok=True)
@@ -374,8 +449,11 @@ def main(argv=None, base=ROOT):
     h = hashlib.sha256(b"".join((lists_dir / n).read_bytes() for n in files)).hexdigest()
     write(lists_dir / "version.txt", h + "\n")
     write(reports_dir / "stats.json",
-          json.dumps({"sources": stats, **new}, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+          json.dumps({"sources": stats, "addresses_by_source": volumes, **new},
+                     ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     write(reports_dir / "manual.md", report)
+    write(reports_dir / "sources.md", sources_md)
+    write(reports_dir / "domains.md", domains_md)
 
     print(f"Готово: {len(nets)} префиксов ({new['addresses']:,} адресов), "
           f"{len(vpn_domains)} VPN-доменов, {len(direct_domains)} no_vpn")
