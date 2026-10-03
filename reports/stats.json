@@ -1,7 +1,7 @@
 {
   "addresses": 23304271,
   "addresses_by_source": {
-    "akamai:AS16625": 4167168,
+    "akamai:AS16625": 4148736,
     "akamai:AS20940": 13880256,
     "anthropic:AS399358": 512,
     "anthropic:AS60808": 256,
@@ -31,7 +31,7 @@
   "direct_domains": 34,
   "prefixes": 870,
   "sources": {
-    "akamai:AS16625": 1843,
+    "akamai:AS16625": 1834,
     "akamai:AS20940": 3968,
     "anthropic:AS399358": 1,
     "anthropic:AS60808": 1,
@@ -39,7 +39,7 @@
     "cloudflare:cloudflare": 15,
     "cloudflare:prefixes": 1,
     "discord:prefixes": 1,
-    "gcore:AS199524": 464,
+    "gcore:AS199524": 458,
     "google:AS15169": 1235,
     "google:AS19527": 244,
     "google:AS36040": 85,
