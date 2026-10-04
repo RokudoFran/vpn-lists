@@ -32,7 +32,7 @@
   "prefixes": 870,
   "sources": {
     "akamai:AS16625": 1834,
-    "akamai:AS20940": 3968,
+    "akamai:AS20940": 3969,
     "anthropic:AS399358": 1,
     "anthropic:AS60808": 1,
     "aws_cloudfront:cloudfront": 211,
