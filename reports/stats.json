@@ -1,7 +1,7 @@
 {
   "addresses": 23304271,
   "addresses_by_source": {
-    "akamai:AS16625": 4148736,
+    "akamai:AS16625": 4136448,
     "akamai:AS20940": 13880256,
     "anthropic:AS399358": 512,
     "anthropic:AS60808": 256,
@@ -31,8 +31,8 @@
   "direct_domains": 34,
   "prefixes": 870,
   "sources": {
-    "akamai:AS16625": 1834,
-    "akamai:AS20940": 3969,
+    "akamai:AS16625": 1827,
+    "akamai:AS20940": 3972,
     "anthropic:AS399358": 1,
     "anthropic:AS60808": 1,
     "aws_cloudfront:cloudfront": 211,
