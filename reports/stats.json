@@ -32,7 +32,7 @@
   "prefixes": 870,
   "sources": {
     "akamai:AS16625": 1831,
-    "akamai:AS20940": 3967,
+    "akamai:AS20940": 3964,
     "anthropic:AS399358": 1,
     "anthropic:AS60808": 1,
     "aws_cloudfront:cloudfront": 211,
@@ -40,7 +40,7 @@
     "cloudflare:prefixes": 1,
     "discord:prefixes": 1,
     "gcore:AS199524": 455,
-    "google:AS15169": 1236,
+    "google:AS15169": 1237,
     "google:AS19527": 246,
     "google:AS36040": 85,
     "google:AS43515": 191,
