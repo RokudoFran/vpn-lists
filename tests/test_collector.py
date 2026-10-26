@@ -250,13 +250,18 @@ class CollectorTest(unittest.TestCase):
 
     def test_dead_domain_is_reported_but_build_continues(self):
         self.repo.dns = {"svc3.com": "nxdomain", "bank.ru": "servfail"}
-        out = self.repo.run()
-        report = self.repo.read("reports/domains.md")
-        self.assertIn("| svc3.com | VPN | не существует (NXDOMAIN) |", report)
-        self.assertIn("| bank.ru | no_vpn | ошибка DNS (SERVFAIL) |", report)
-        self.assertIn("проблемных 2", report)
-        self.assertIn("svc3.com", self.repo.read("lists/domains_vpn.txt"), "отчёт не меняет списки")
-        self.assertIn("ВНИМАНИЕ: домен svc3.com", out)
+        # Exercise both formats regardless of the environment running the tests.
+        for github_actions, prefix in (("", "ВНИМАНИЕ: "), ("true", "::warning::")):
+            with self.subTest(github_actions=github_actions), \
+                 mock.patch.dict(os.environ, {"GITHUB_ACTIONS": github_actions}):
+                out = self.repo.run()
+                report = self.repo.read("reports/domains.md")
+                self.assertIn("| svc3.com | VPN | не существует (NXDOMAIN) |", report)
+                self.assertIn("| bank.ru | no_vpn | ошибка DNS (SERVFAIL) |", report)
+                self.assertIn("проблемных 2", report)
+                self.assertIn("svc3.com", self.repo.read("lists/domains_vpn.txt"), "отчёт не меняет списки")
+                self.assertIn(prefix + "домен svc3.com", out)
+
 
     def test_doh_outage_is_not_reported_as_dead_domains(self):
         self.repo.dns = {d: "error" for d in VPN_DOMAINS + DIRECT_DOMAINS}
