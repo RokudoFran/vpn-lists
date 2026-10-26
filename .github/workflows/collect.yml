@@ -2,29 +2,68 @@ name: collect
 
 on:
   schedule:
-    - cron: "0 1 * * *"      # каждый день в 04:00 МСК
-  workflow_dispatch:         # кнопка ручного запуска
+    - cron: "17 1 * * *" # 04:17 Moscow; GitHub may delay the actual start
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Allow intentional large changes (hard minimums remain)"
+        type: boolean
+        required: false
+        default: false
   push:
-    paths: [services.yaml, collector.py, manual.txt, .github/workflows/collect.yml]
+    branches: [main]
+    paths:
+      - services.yaml
+      - collector.py
+      - manual.txt
+      - tests/**
+      - .github/workflows/collect.yml
 
 permissions:
   contents: write
 
+concurrency:
+  group: vpn-lists-collect-main
+  cancel-in-progress: false
+
 jobs:
   collect:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
-      - run: python collector.py
+      - name: Install dependencies
+        run: python -m pip install "pyyaml>=6,<7"
+      - name: Validate configuration
+        run: python collector.py --check
+      - name: Offline tests
+        run: python -m unittest discover -s tests -v
+      - name: Collect
+        env:
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && '1' || '0' }}
+        run: python collector.py
       - name: Commit lists
+        shell: bash
         run: |
+          set -euo pipefail
+          git add -A lists reports
+          if git diff --cached --quiet; then
+            echo "Lists and reports unchanged"
+            exit 0
+          fi
+          # Avoid rebasing generated data onto a changed configuration.
+          git fetch origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "::error::main changed during collection; rerun collect"
+            exit 1
+          fi
           git config user.name "list-bot"
           git config user.email "list-bot@users.noreply.github.com"
-          git add -A lists reports
-          git diff --cached --quiet || git commit -m "update lists $(date -u +%F)"
-          git pull --rebase
-          git push
+          git commit -m "update lists $(date -u +%F)"
+          git push origin HEAD:main
