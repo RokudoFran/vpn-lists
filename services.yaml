@@ -89,7 +89,11 @@ services:
   openai:
     enabled: true
     asn: []
-    domains: [openai.com, chatgpt.com, oaistatic.com, oaiusercontent.com, sora.com]
+    # https://help.openai.com/en/articles/9247338-network-recommendations-for-chatgpt-errors-on-web-and-apps
+    domains: [openai.com, chatgpt.com, oaistatic.com, oaiusercontent.com, sora.com,
+              oaistatsig.com, cdn.openaimerge.com, cdn.workos.com, forwarder.workos.com,
+              frontend-apps-multi-region.workos.com, setup.workos.com,
+              images.workoscdn.com, workos.imgix.net]
 
   anthropic:         # AS перенесены из manual.txt: отчёт RIPEstat показал владельца Anthropic
     enabled: true
@@ -119,7 +123,8 @@ services:
   canva:
     enabled: true
     asn: []
-    domains: [canva.com]
+    # https://www.canva.com/help/allow-canva-through-firewall/
+    domains: [canva.com, canva-apps.com, canvacode.com, canva.link, canva.ai]
 
   notion:            # основной сайт переехал на notion.com
     enabled: true
@@ -136,7 +141,18 @@ services:
   docker_hub:
     enabled: true
     asn: []
-    domains: [docker.com, docker.io]
+    # https://docs.docker.com/desktop/enterprise/allow-list/
+    domains: [docker.com, docker.io, cdn.auth0.com]
+
+  shared_challenge:  # dependency of OpenAI and Canva; domain rule survives CDN IP changes
+    enabled: true
+    asn: []
+    domains: [challenges.cloudflare.com]
+
+  docker_hardened_images:  # optional: enable only when using DHI
+    enabled: false
+    asn: []
+    domains: [dhi.io]
 
   hashicorp:
     enabled: true
@@ -163,10 +179,27 @@ services:
     asn: []
     domains: [jetbrains.com, jb.gg]
 
-  ai_misc:           # не уверен в гео-блоке — включай, если не открывается
+  perplexity:        # optional; direct access should be tested locally
     enabled: false
     asn: []
-    domains: [perplexity.ai, cursor.com, cursor.sh, midjourney.com]
+    domains: [perplexity.ai]
+
+  cursor:            # optional core domains, not a complete cloud-agent/auth allowlist
+    enabled: false
+    asn: []
+    domains: [cursor.com, cursor.sh, cursorapi.com, cursor-cdn.com]
+
+  midjourney:        # optional; review asset dependencies before enabling
+    enabled: false
+    asn: []
+    domains: [midjourney.com]
+
+  github_downloads:  # optional Downloads/Releases/Packages, not all Actions endpoints
+    enabled: false
+    asn: []
+    domains: [github.com, objects.githubusercontent.com, objects-origin.githubusercontent.com,
+              github-releases.githubusercontent.com, github-registry-files.githubusercontent.com,
+              pkg-containers.githubusercontent.com, ghcr.io]
 
   vendor_drivers:    # драйверы/прошивки, иногда режут загрузки из РФ
     enabled: false
