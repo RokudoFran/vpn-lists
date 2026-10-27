@@ -5,9 +5,10 @@
     python collector.py --check    только проверить services.yaml и manual.txt, без сети
     FORCE=1 python collector.py    записать, даже если списки изменились подозрительно сильно
 
-Пока не пройдены все проверки, ничего не пишется: обновляется либо всё, либо ничего.
+Проверки выполняются до записи. bundle.json атомарен; при обычной ошибке записи набор откатывается.
+Отключение питания между заменами legacy-файлов не является атомарной транзакцией.
 """
-import concurrent.futures, hashlib, ipaddress, json, os, pathlib, re, sys, time, urllib.request
+import concurrent.futures, datetime, hashlib, ipaddress, json, os, pathlib, re, sys, tempfile, time, urllib.request
 
 import yaml
 
@@ -22,6 +23,14 @@ MAX_GROW = 0.25            # и объём адресов не растёт бо
 SOURCE_MIN_SHARE = 0.5     # источник не может отдать меньше половины прошлого числа префиксов
 MANUAL_MIN_PREFIXLEN = 12  # ручная запись шире /12 — почти наверняка опечатка в маске
 SOURCE_MIN_PREFIXLEN = 8   # шире /8 из внешнего источника не бывает — значит, пришёл мусор
+
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+MAX_SOURCE_ITEMS = 50000
+MAX_BAD_SHARE = 0.01
+MAX_CHURN = 0.25
+MAX_BUNDLE_BYTES = 60000
+NONPUBLIC = tuple(ipaddress.ip_network(x) for x in ['0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/3'])
+RIPE_WINDOW_DAYS = 14  # Deliberate historical coverage; do not silently change on migration.
 
 RIPE_ASN = "https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS{}&sourceapp=vpn-lists"
 RIPE_WHO = "https://stat.ripe.net/data/prefix-overview/data.json?resource={}&sourceapp=vpn-lists"
@@ -42,7 +51,10 @@ def get(url, as_json=True, attempts=3):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "vpn-lists-collector"})
             with urllib.request.urlopen(req, timeout=60) as r:
-                data = r.read().decode("utf-8")
+                raw = r.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    raise Fail(f"{url}: response exceeds {MAX_RESPONSE_BYTES} bytes")
+                data = raw.decode("utf-8")
             return json.loads(data) if as_json else data
         except Exception as e:
             print(f"{url}: попытка {attempt} не удалась: {e}", file=sys.stderr)
@@ -61,7 +73,9 @@ SOURCES = {
 
 
 def asn_prefixes(asn):
-    d = get(RIPE_ASN.format(asn))
+    end = datetime.datetime.now(datetime.timezone.utc)
+    start = end - datetime.timedelta(days=RIPE_WINDOW_DAYS)
+    d = get(RIPE_ASN.format(asn) + f"&starttime={int(start.timestamp())}&endtime={int(end.timestamp())}&min_peers_seeing=10")
     if d.get("status", "ok") != "ok":
         raise Fail(f"RIPEstat по AS{asn} ответил status={d.get('status')!r}")
     return [p["prefix"] for p in d["data"]["prefixes"]]
@@ -85,7 +99,10 @@ def domain_status(domain):
             req = urllib.request.Request(DOH.format(domain), headers={"User-Agent": "vpn-lists-collector",
                                                                       "Accept": "application/dns-json"})
             with urllib.request.urlopen(req, timeout=15) as r:
-                status = json.loads(r.read().decode("utf-8")).get("Status")
+                raw = r.read(65537)
+                if len(raw) > 65536:
+                    raise ValueError("oversized DNS response")
+                status = json.loads(raw.decode("utf-8")).get("Status")
             return {0: "ok", 3: "nxdomain"}.get(status, "servfail")
         except Exception:
             if attempt == 0:
@@ -96,7 +113,7 @@ def domain_status(domain):
 def warn(msg):
     """Предупреждение: в Actions — жёлтой плашкой в интерфейсе, локально — в stderr."""
     if os.environ.get("GITHUB_ACTIONS"):
-        print("::warning::" + msg)
+        print("::warning::" + msg.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
     else:
         print("ВНИМАНИЕ: " + msg, file=sys.stderr)
 
@@ -111,7 +128,7 @@ def parse_strict(text, where):
         raise Fail(f"{where}: {text!r}: {e}")
     if n.version != 4:
         raise Fail(f"{where}: {n}: нужен IPv4")
-    if not n.is_global:
+    if not n.is_global or any(n.overlaps(block) for block in NONPUBLIC):
         raise Fail(f"{where}: {n}: не публичная сеть")
     if n.prefixlen < MANUAL_MIN_PREFIXLEN:
         raise Fail(f"{where}: {n}: шире /{MANUAL_MIN_PREFIXLEN} — похоже на опечатку в маске")
@@ -120,18 +137,26 @@ def parse_strict(text, where):
 
 def parse_source(items, where):
     """Данные из внешнего источника: непонятное пропускаем, явный мусор — ошибка."""
-    out = []
+    if not isinstance(items, (list, tuple)) or len(items) > MAX_SOURCE_ITEMS:
+        raise Fail(f"{where}: invalid or oversized source array")
+    out, invalid = [], 0
     for p in items:
         try:
             n = ipaddress.ip_network(str(p).strip(), strict=False)
         except ValueError:
-            print(f"{where}: пропускаю непонятное {p!r}", file=sys.stderr)
+            invalid += 1
             continue
-        if n.version != 4 or not n.is_global:
+        if n.version != 4:
             continue
         if n.prefixlen < SOURCE_MIN_PREFIXLEN:
             raise Fail(f"{where}: источник вернул {n} — шире /{SOURCE_MIN_PREFIXLEN} так не бывает")
+        if not n.is_global or any(n.overlaps(block) for block in NONPUBLIC):
+            continue
         out.append(n)
+    if invalid:
+        if invalid / max(len(items), 1) > MAX_BAD_SHARE:
+            raise Fail(f"{where}: malformed entries {invalid}/{len(items)}")
+        warn(f"{where}: skipped {invalid} malformed entries")
     return out
 
 
@@ -151,9 +176,38 @@ def parents(domain):
 
 
 # ---- Конфигурация -----------------------------------------------------------
+class UniqueKeyLoader(yaml.SafeLoader):
+    """Reject duplicate keys instead of silently overriding configuration."""
+
+
+UniqueKeyLoader.yaml_implicit_resolvers = {
+    key: [(tag, pattern) for tag, pattern in values if tag != "tag:yaml.org,2002:bool"]
+    for key, values in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+UniqueKeyLoader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true|false)$", re.I), list("tTfF"))
+
+
+def unique_mapping(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if not isinstance(key, str):
+            raise Fail(f"YAML line {key_node.start_mark.line + 1}: mapping keys must be strings")
+        if key in mapping:
+            raise Fail(f"YAML line {key_node.start_mark.line + 1}: duplicate key {key!r}")
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
+
+
 def load_config(path):
     """Читает services.yaml и проверяет структуру: опечатка в ключе — ошибка, а не тихий пропуск."""
-    cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        cfg = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+    except yaml.YAMLError as exc:
+        raise Fail(f"{path.name}: invalid YAML: {exc}") from exc
     if not isinstance(cfg, dict):
         raise Fail(f"{path.name}: ожидаются разделы services и no_vpn")
     unknown = set(cfg) - {"services", "no_vpn"}
@@ -178,7 +232,7 @@ def load_config(path):
             if isinstance(asn, bool) or not isinstance(asn, int) or not 0 < asn < 2**32:
                 raise Fail(f"{where}.asn: {asn!r} — не номер AS")
         for src in s.get("sources") or []:
-            if src not in SOURCES:
+            if not isinstance(src, str) or src not in SOURCES:
                 raise Fail(f"{where}.sources: {src!r} — такого источника нет, есть {sorted(SOURCES)}")
         # проверяем и у выключенных сервисов: опечатка не должна ждать, пока сервис включат
         s["prefixes"] = [parse_strict(str(p), f"{where}.prefixes") for p in s.get("prefixes") or []]
@@ -240,8 +294,9 @@ def build_domains(cfg):
 # ---- Сбор и проверки --------------------------------------------------------
 def collect(cfg):
     """Префиксы всех включённых сервисов -> (подсети, {источник: префиксов}, {источник: адресов})."""
-    nets, stats, volumes = [], {}, {}
+    nets, stats, volumes, source_nets = [], {}, {}, {}
     def add(key, got):
+        source_nets[key] = [str(n) for n in ipaddress.collapse_addresses(got)]
         stats[key] = len(got)
         volumes[key] = sum(n.num_addresses for n in ipaddress.collapse_addresses(got))
         nets.extend(got)
@@ -258,7 +313,7 @@ def collect(cfg):
         print(f"{key} -> {n} префиксов")
         if n == 0:
             warn(f"{key} не дал ни одного префикса")
-    return nets, stats, volumes
+    return nets, stats, volumes, source_nets
 
 
 def read_previous(lists_dir, reports_dir):
@@ -274,11 +329,31 @@ def read_previous(lists_dir, reports_dir):
             prev[key] = len(p.read_text(encoding="utf-8").split())
     s = reports_dir / "stats.json"
     if s.exists():
-        prev["sources"] = json.loads(s.read_text(encoding="utf-8")).get("sources", {})
+        previous_stats = json.loads(s.read_text(encoding="utf-8"))
+        prev["sources"] = previous_stats.get("sources", {})
+        prev["source_networks"] = previous_stats.get("source_networks", {})
+    prev["networks"] = f.read_text(encoding="utf-8").split() if f.exists() else []
     return prev
 
 
-def check_lists(prev, new, stats, force):
+def coverage_delta(old_items, new_items):
+    """Address-volume changes, independent of aggregation or prefix count."""
+    old = list(ipaddress.collapse_addresses(ipaddress.ip_network(x) for x in old_items))
+    new = list(ipaddress.collapse_addresses(ipaddress.ip_network(x) for x in new_items))
+    i = j = overlap = 0
+    while i < len(old) and j < len(new):
+        a, b = old[i], new[j]
+        overlap += max(0, min(int(a.broadcast_address), int(b.broadcast_address)) - max(int(a.network_address), int(b.network_address)) + 1)
+        if a.broadcast_address <= b.broadcast_address:
+            i += 1
+        else:
+            j += 1
+    old_volume = sum(n.num_addresses for n in old)
+    new_volume = sum(n.num_addresses for n in new)
+    return old_volume, new_volume - overlap, old_volume - overlap
+
+
+def check_lists(prev, new, stats, force, source_nets=None, networks=None):
     """Жёсткие проверки (FORCE не отменяет: пустой список не бывает правильным)
     и мягкие — резкие изменения относительно прошлого сбора (FORCE=1 пропускает их осознанно)."""
     hard = []
@@ -288,7 +363,23 @@ def check_lists(prev, new, stats, force):
         if new[key] < minimum:
             hard.append(f"{label} {new[key]} (минимум {minimum})")
 
+    for source, count in stats.items():
+        if count == 0:
+            hard.append(f"{source}: empty required source")
+    for key, maximum in (("prefixes", 5000), ("vpn_domains", 1000), ("direct_domains", 1000), ("addresses", 50000000)):
+        if new[key] > maximum:
+            hard.append(f"{key} exceeds router limit {maximum}")
     soft = []
+    for source, current in (source_nets or {}).items():
+        baseline = prev.get("source_networks", {}).get(source)
+        if baseline:
+            volume, added, removed = coverage_delta(baseline, current)
+            if volume and max(added, removed) / volume > MAX_CHURN:
+                soft.append(f"{source}: address churn +{added} -{removed} of {volume}")
+    if networks is not None and prev.get("networks"):
+        volume, added, removed = coverage_delta(prev["networks"], networks)
+        if volume and max(added, removed) / volume > MAX_CHURN:
+            soft.append(f"total address churn +{added} -{removed} of {volume}")
     a0, a1 = prev.get("addresses"), new["addresses"]
     if a0 and not (1 - MAX_SHRINK) <= a1 / a0 <= (1 + MAX_GROW):
         soft.append(f"объём адресов {a0:,} -> {a1:,} ({(a1 / a0 - 1) * 100:+.0f}%)")
@@ -400,6 +491,52 @@ def write(path, text):
     os.replace(tmp, path)
 
 
+def make_bundle(files):
+    payload = json.dumps(files, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    envelope = {"schema": 1, "sha512": hashlib.sha512(payload.encode("ascii")).hexdigest(), "payload": payload}
+    text = json.dumps(envelope, ensure_ascii=True, separators=(",", ":"), sort_keys=True) + "\n"
+    if len(text.encode()) > MAX_BUNDLE_BYTES:
+        raise Fail(f"bundle.json exceeds {MAX_BUNDLE_BYTES} bytes; router format needs migration")
+    return text
+
+
+def publish_outputs(base, outputs):
+    """Stage every file, then replace; roll back ordinary errors. Not power-loss atomic.
+
+    bundle.json is replaced last and is the only artifact consumed by updater v2.
+    """
+    with tempfile.TemporaryDirectory(prefix=".vpn-stage-", dir=base) as directory:
+        stage = pathlib.Path(directory)
+        for rel, text in outputs.items():
+            path = stage / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write(path, text)
+        previous, changed = {}, []
+        try:
+            for rel in outputs:
+                target = base / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                previous[rel] = target.read_bytes() if target.exists() else None
+                os.replace(stage / rel, target)
+                changed.append(rel)
+        except OSError as exc:
+            errors = []
+            for rel in reversed(changed):
+                target = base / rel
+                try:
+                    if previous[rel] is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        restore = stage / "restore"
+                        restore.write_bytes(previous[rel])
+                        os.replace(restore, target)
+                except OSError as rollback_error:
+                    errors.append(f"{rel}: {rollback_error}")
+            if errors:
+                raise Fail("Write failed; rollback incomplete: " + "; ".join(errors)) from exc
+            raise Fail(f"Write failed; previous files restored: {exc}") from exc
+
+
 # ---- Главное ----------------------------------------------------------------
 def main(argv=None, base=ROOT):
     argv = sys.argv[1:] if argv is None else argv
@@ -417,43 +554,39 @@ def main(argv=None, base=ROOT):
         return
 
     # 2. Сбор
-    auto, stats, volumes = collect(cfg)
+    auto, stats, volumes, source_nets = collect(cfg)
     auto = list(ipaddress.collapse_addresses(auto))
     leftover = [n for n, _ in manual if not any(n.subnet_of(a) for a in auto)]
     print(f"manual.txt: {len(manual)} записей, из них не покрыто автосбором целиком: {len(leftover)}")
     nets = list(ipaddress.collapse_addresses(auto + leftover))
+    if any(n.prefixlen < SOURCE_MIN_PREFIXLEN for n in nets):
+        raise Fail("Collapsed network exceeds router prefix limit /8")
 
     # 3. Проверки — до любой записи на диск
     new = {"prefixes": len(nets), "addresses": sum(n.num_addresses for n in nets),
            "vpn_domains": len(vpn_domains), "direct_domains": len(direct_domains)}
-    check_lists(read_previous(lists_dir, reports_dir), new, stats, force)
+    check_lists(read_previous(lists_dir, reports_dir), new, stats, force, source_nets, [str(n) for n in nets])
     report = manual_report(manual, auto)
     sources_md = sources_report(stats, volumes, leftover, nets)
     domains_md = check_domains(vpn_domains, direct_domains)
 
-    # 4. Запись: только данные, никаких команд — роутер сам их читает и проверяет
-    lists_dir.mkdir(exist_ok=True)
-    reports_dir.mkdir(exist_ok=True)
-    for old in (lists_dir / "vpn_ipv4.rsc", lists_dir / "dns.rsc", reports_dir / "leftover.md"):
-        old.unlink(missing_ok=True)
-    # /32 пишем без маски — RouterOS хранит одиночные адреса именно так
+    # Prepare all outputs in memory before staging writes.
     fmt = lambda n: str(n.network_address) if n.prefixlen == 32 else str(n)
     files = {
         "vpn_ipv4.txt": [fmt(n) for n in nets],
         "domains_vpn.txt": vpn_domains,
         "domains_direct.txt": direct_domains,
     }
-    for name, items in files.items():
-        write(lists_dir / name, "".join(f"{x}\n" for x in items))
-    # Версия списков: роутер обновляется только когда она меняется
-    h = hashlib.sha256(b"".join((lists_dir / n).read_bytes() for n in files)).hexdigest()
-    write(lists_dir / "version.txt", h + "\n")
-    write(reports_dir / "stats.json",
-          json.dumps({"sources": stats, "addresses_by_source": volumes, **new},
-                     ensure_ascii=False, indent=2, sort_keys=True) + "\n")
-    write(reports_dir / "manual.md", report)
-    write(reports_dir / "sources.md", sources_md)
-    write(reports_dir / "domains.md", domains_md)
+    outputs = {"lists/" + name: "".join(f"{x}\n" for x in items) for name, items in files.items()}
+    h = hashlib.sha256("".join(outputs["lists/" + name] for name in files).encode()).hexdigest()
+    outputs["lists/version.txt"] = h + "\n"
+    outputs["reports/stats.json"] = json.dumps(
+        {"sources": stats, "addresses_by_source": volumes, "source_networks": source_nets,
+         "ripe_window_days": RIPE_WINDOW_DAYS, **new}, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    outputs.update({"reports/manual.md": report, "reports/sources.md": sources_md, "reports/domains.md": domains_md})
+    # Single, self-contained artifact for the new router updater; publish last.
+    outputs["lists/bundle.json"] = make_bundle(files)
+    publish_outputs(base, outputs)
 
     print(f"Готово: {len(nets)} префиксов ({new['addresses']:,} адресов), "
           f"{len(vpn_domains)} VPN-доменов, {len(direct_domains)} no_vpn")
