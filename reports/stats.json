@@ -2530,7 +2530,7 @@
     "cloudflare:cloudflare": 15,
     "cloudflare:prefixes": 1,
     "discord:prefixes": 1,
-    "gcore:AS199524": 455,
+    "gcore:AS199524": 454,
     "google:AS15169": 1255,
     "google:AS19527": 259,
     "google:AS36040": 85,
@@ -2549,5 +2549,5 @@
     "x_twitter:AS13414": 26,
     "x_twitter:AS35995": 6
   },
-  "vpn_domains": 107
+  "vpn_domains": 121
 }

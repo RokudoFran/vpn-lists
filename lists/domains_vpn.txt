@@ -1,7 +1,15 @@
 android.com
 anthropic.com
+canva-apps.com
+canva.ai
 canva.com
+canva.link
+canvacode.com
+cdn.auth0.com
+cdn.openaimerge.com
+cdn.workos.com
 cdninstagram.com
+challenges.cloudflare.com
 chatgpt.com
 claude.ai
 claude.com
@@ -20,6 +28,8 @@ facebook.com
 facetime.apple.com
 fb.com
 fbcdn.net
+forwarder.workos.com
+frontend-apps-multi-region.workos.com
 g.co
 ggpht.com
 githubcopilot.com
@@ -36,6 +46,7 @@ gstatic.com
 gvt1.com
 gvt2.com
 hashicorp.com
+images.workoscdn.com
 instagram.com
 jb.gg
 jetbrains.com
@@ -51,6 +62,7 @@ notion.com
 notion.site
 notion.so
 oaistatic.com
+oaistatsig.com
 oaiusercontent.com
 openai.com
 patreon.com
@@ -70,6 +82,7 @@ roblox.cn
 roblox.com
 sc-cdn.net
 scdn.co
+setup.workos.com
 signal.art
 signal.org
 snap.com
@@ -99,6 +112,7 @@ whatsapp.net
 whispersystems.org
 withgoogle.com
 wordpress.com
+workos.imgix.net
 wp.com
 x.ai
 x.com
