@@ -1,5 +1,5 @@
 {
-  "addresses": 23331697,
+  "addresses": 23332209,
   "addresses_by_source": {
     "akamai:AS16625": 4136448,
     "akamai:AS20940": 13880000,
@@ -11,7 +11,7 @@
     "discord:prefixes": 16384,
     "gcore:AS199524": 125698,
     "google:AS15169": 2640128,
-    "google:AS19527": 1824000,
+    "google:AS19527": 1824512,
     "google:AS36040": 21760,
     "google:AS43515": 1828096,
     "linkedin:AS14413": 6400,
@@ -29,7 +29,7 @@
     "x_twitter:AS35995": 2560
   },
   "direct_domains": 34,
-  "prefixes": 877,
+  "prefixes": 878,
   "ripe_window_days": 14,
   "source_networks": {
     "akamai:AS16625": [
@@ -2284,6 +2284,7 @@
       "35.208.0.0/13",
       "35.216.0.0/14",
       "57.140.192.0/18",
+      "64.39.82.0/23",
       "66.22.228.0/23",
       "136.121.4.0/24",
       "136.121.32.0/21",
@@ -2531,7 +2532,7 @@
     "discord:prefixes": 1,
     "gcore:AS199524": 460,
     "google:AS15169": 1264,
-    "google:AS19527": 258,
+    "google:AS19527": 261,
     "google:AS36040": 84,
     "google:AS43515": 193,
     "linkedin:AS14413": 25,
