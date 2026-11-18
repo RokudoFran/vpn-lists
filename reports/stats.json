@@ -1,5 +1,5 @@
 {
-  "addresses": 23334257,
+  "addresses": 23334769,
   "addresses_by_source": {
     "akamai:AS16625": 4123136,
     "akamai:AS20940": 13880000,
@@ -9,12 +9,12 @@
     "cloudflare:cloudflare": 1524736,
     "cloudflare:prefixes": 256,
     "discord:prefixes": 16384,
-    "gcore:AS199524": 127234,
+    "gcore:AS199524": 127490,
     "google:AS15169": 2640128,
     "google:AS19527": 1824512,
     "google:AS36040": 21760,
     "google:AS43515": 1828096,
-    "linkedin:AS14413": 6400,
+    "linkedin:AS14413": 6656,
     "meta:AS32934": 449024,
     "meta:AS54115": 5120,
     "netflix:AS2906": 292864,
@@ -29,7 +29,7 @@
     "x_twitter:AS35995": 2560
   },
   "direct_domains": 34,
-  "prefixes": 881,
+  "prefixes": 883,
   "ripe_window_days": 14,
   "source_networks": {
     "akamai:AS16625": [
@@ -2128,6 +2128,7 @@
       "169.155.122.0/23",
       "169.155.124.0/23",
       "176.126.122.0/24",
+      "178.107.8.0/24",
       "178.107.10.0/23",
       "178.107.12.0/22",
       "178.107.17.0/24",
@@ -2384,7 +2385,8 @@
       "144.2.177.0/24",
       "144.2.178.0/23",
       "144.2.180.0/22",
-      "144.2.185.0/24"
+      "144.2.185.0/24",
+      "144.2.194.0/24"
     ],
     "meta:AS32934": [
       "31.13.24.0/21",
@@ -2526,15 +2528,15 @@
     "cloudflare:cloudflare": 15,
     "cloudflare:prefixes": 1,
     "discord:prefixes": 1,
-    "gcore:AS199524": 466,
+    "gcore:AS199524": 467,
     "google:AS15169": 1264,
     "google:AS19527": 261,
     "google:AS36040": 84,
     "google:AS43515": 193,
-    "linkedin:AS14413": 25,
+    "linkedin:AS14413": 26,
     "meta:AS32934": 233,
     "meta:AS54115": 11,
-    "netflix:AS2906": 251,
+    "netflix:AS2906": 253,
     "roblox:AS22697": 46,
     "telegram:AS211157": 2,
     "telegram:AS44907": 2,
