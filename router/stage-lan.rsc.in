@@ -1,0 +1,51 @@
+# Generated with kit-specific hashes. Select one stage, then import the generated file.
+{
+    :global vlAuditStage
+    :local selected $vlAuditStage
+    :set vlAuditStage ""
+    :local hashes {@SOURCE_HASHES@}
+    :local expected ($hashes->$selected)
+    :if ([:typeof $expected] != "str") do={ :error "select dry-lan, once-lan or hourly-lan" }
+    :if ([/system identity get name] != "HOME-AX3") do={ :error "unexpected router identity" }
+    :local cron [/system scheduler find where name="vpn-lists-hourly"]
+    :if ([:len $cron] != 1) do={ :error "expected one vpn-lists-hourly" }
+    :if (![/system scheduler get $cron disabled]) do={ :error "pause hourly scheduler before staging" }
+    :if ([/system scheduler get $cron on-event] != "/system script run vpn-lists-v2") do={ :error "unexpected scheduler target" }
+    :foreach sid in=[/system scheduler find where name="vpn-lists"] do={
+        :if (![/system scheduler get $sid disabled]) do={ :error "another vpn-lists scheduler is enabled" }
+    }
+    :foreach jobRow in=[/system script job print as-value] do={
+        :local running [:tostr ($jobRow->"script")]
+        :if (($running = "vpn-lists") || ($running = "vpn-lists-v2")) do={ :error "updater job present" }
+    }
+    :local target [/system script find where name="vpn-lists-v2"]
+    :local current ""
+    :if ([:len $target] = 0) do={
+        :if ($selected != "dry-lan") do={ :error "bootstrap the missing script with dry-lan first" }
+    } else={
+        :if ([:len $target] != 1) do={ :error "ambiguous vpn-lists-v2" }
+        :set current [/system script get $target source]
+        :local currentHash [:convert $current from=raw to=hex transform=sha512]
+        :local known false
+        :foreach stageName,stageHash in=$hashes do={ :if ($currentHash = $stageHash) do={ :set known true } }
+        :if (!$known) do={ :error "unknown installed Source; preserve and review" }
+    }
+    :local newName ("v2-" . $selected . ".txt")
+    :local newId [/file find where name=$newName]
+    :if ([:len $newId] != 1) do={ :error ("missing " . $newName) }
+    :local proposed [/file get $newId contents]
+    :if ([:convert $proposed from=raw to=hex transform=sha512] != $expected) do={ :error "Source file hash mismatch" }
+    :if ([:typeof [:parse $proposed]] != "code") do={ :error "Source did not parse to code" }
+    :if (![/system scheduler get $cron disabled]) do={ :error "scheduler resumed during staging" }
+    :if ([:len $target] = 0) do={
+        :if ([:len [/system script find where name="vpn-lists-v2"]] != 0) do={ :error "target appeared during staging" }
+        /system script add name=vpn-lists-v2 source=$proposed dont-require-permissions=no policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon
+        :set target [/system script find where name="vpn-lists-v2"]
+    } else={
+        :if ([/system script get $target source] != $current) do={ :error "Source changed during staging" }
+        /system script set $target source=$proposed
+    }
+    :if ([:len $target] != 1) do={ :error "unexpected script count after staging" }
+    :if ([/system script get $target source] != $proposed) do={ :error "Source readback failed; keep scheduler paused" }
+    :put ("Installed Source stage=" . $selected . "; scheduler paused; updater not run")
+}
