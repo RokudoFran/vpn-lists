@@ -1,5 +1,14 @@
 android.com
 anthropic.com
+app.launchdarkly.com
+autocad360.com
+autocadws.com
+autodesk-prod.okta.com
+autodesk.com
+autodesk.net
+autodesk.pubnubapi.com
+autodesk360.com
+autodeskidentity.com
 canva-apps.com
 canva.ai
 canva.com
@@ -7,6 +16,7 @@ canva.link
 canvacode.com
 cdn.auth0.com
 cdn.openaimerge.com
+cdn.web-platform.io
 cdn.workos.com
 cdninstagram.com
 challenges.cloudflare.com
@@ -14,7 +24,10 @@ chatgpt.com
 claude.ai
 claude.com
 claudeusercontent.com
+clientsdk.launchdarkly.com
+clientstream.launchdarkly.com
 copilot.microsoft.com
+d1rvg4h59z7jah.cloudfront.net
 discord.com
 discord.dev
 discord.gg
@@ -24,6 +37,7 @@ discordapp.net
 discordcdn.com
 docker.com
 docker.io
+events.launchdarkly.com
 facebook.com
 facetime.apple.com
 fb.com
@@ -46,6 +60,7 @@ gstatic.com
 gvt1.com
 gvt2.com
 hashicorp.com
+hcaptcha.com
 images.workoscdn.com
 instagram.com
 jb.gg
@@ -64,6 +79,7 @@ notion.so
 oaistatic.com
 oaistatsig.com
 oaiusercontent.com
+ok10static.oktacdn.com
 openai.com
 patreon.com
 patreonusercontent.com
