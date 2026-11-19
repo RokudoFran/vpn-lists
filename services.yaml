@@ -179,6 +179,21 @@ services:
     asn: []
     domains: [jetbrains.com, jb.gg]
 
+  autodesk:          # AutoCAD, Autodesk Account, Identity Manager, Access, лицензии, загрузки и облако
+    enabled: true
+    asn: []          # не импортируем всю AS/CDN: Akamai, AWS и др. хостят чужие сервисы
+    # https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/What-URLs-protocols-should-be-accessible-for-Desktop-Subscription-to-work-html.html
+    # https://www.autodesk.com/support/technical/article/caas/tsarticles/ts/2GO1P1KDIaLATbYJwgByp6.html
+    # Корневые домены покрывают поддомены через DNS FWD match-subdomain на MikroTik.
+    # Сторонние зависимости — только узкие хосты, кроме hcaptcha.com.
+    domains: [autodesk.com, autodesk.net, autodesk360.com, autocad360.com, autocadws.com,
+              autodeskidentity.com,
+              clientstream.launchdarkly.com, clientsdk.launchdarkly.com,
+              app.launchdarkly.com, events.launchdarkly.com,
+              cdn.web-platform.io, hcaptcha.com,
+              autodesk-prod.okta.com, ok10static.oktacdn.com,
+              autodesk.pubnubapi.com, d1rvg4h59z7jah.cloudfront.net]
+
   perplexity:        # optional; direct access should be tested locally
     enabled: false
     asn: []
