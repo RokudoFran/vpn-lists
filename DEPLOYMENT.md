@@ -1,84 +1,134 @@
-# Переход HOME-AX3 на обновлённые скрипты
+# Восстановление обновлятора на HOME-AX3
 
-Статус: Python/формат данных проверяются локальными тестами; кандидаты RouterOS ещё НЕ проверены исполнением на устройстве. Не включать их автоматически после загрузки файлов. Рабочие vpn-lists и tunnel-watch-v3 пока остаются активными.
+Эта процедура восстанавливает скрипт `vpn-lists-v2`, его расписание и управляемые IPv4/DNS-записи. После сброса или замены роутера сначала восстановите из своей защищённой копии LAN, доступ владельца, WAN, ключи и peer WireGuard, DNS, NAT и маршрутизацию. Рабочая конфигурация использует адрес `192.168.13.1` на `bridge`, туннель `wg-vps0`, таблицу `to_vpn` и маршрут к VPN-резолверу `8.8.8.8/32` через WG. Часы и доверенные сертификаты должны позволять HTTPS к raw.githubusercontent.com. Команды ниже рассчитаны на RouterOS 7.25.1.
 
-## 1. Сохранить исходное состояние
+## 1. Собрать и проверить комплект на ПК
 
-Сохранить новый экспорт текущего роутера и скачать его на компьютер. При необходимости отдельно создать защищённый backup с ключами; не загружать его на публичный GitHub. Сохранить Source обоих рабочих скриптов и вывод scheduler. Старые скрипты не удалять.
+В PowerShell с Git и Python 3.12 выполните команды в новой папке. Для виртуального окружения и комплекта используются соседние каталоги.
 
-## 2. Обновить GitHub
-
-В архиве `repository/` содержит полную подготовленную копию репозитория без .git, секретов и экспорта роутера. Загрузить СОДЕРЖИМОЕ этой папки в корень RokudoFran/vpn-lists с сохранением подпапок, включая `.github`. Не создавать на GitHub лишний уровень `repository/`.
-
-Ключевые изменения: collector.py, requirements.txt, tests/, tools/, .github/, README.md, DEPLOYMENT.md, router/ и новый lists/bundle.json. Остальные legacy-списки в комплекте не пересобраны из сети: это тот же проверенный набор 869/107/34. При наличии более нового коммита/новых списков сначала сверить изменения, не затирать их вслепую старым архивом. База комплекта указана в RELEASE.txt.
-
-Проверить `offline checks` и `collect`. При ошибке порогов НЕ включать force автоматически; прочитать diff источников. `collect` должен успешно пройти оба jobs, включая publish. Публикация не должна переписывать main, изменённую после начала сборки.
-
-Новый bundle обратно совместим: старый обновлятор продолжит читать прежние .txt. Загрузка Source в GitHub не меняет роутер.
-
-## 3. Проверить возможности RouterOS — без изменения конфигурации
-
-Загрузить только `router/preflight-v2.rsc` в Files роутера под именем `preflight-v2.rsc`.
-
-```routeros
-/import file-name=preflight-v2.rsc verbose=yes dry-run
-/import file-name=preflight-v2.rsc
+```powershell
+git clone https://github.com/RokudoFran/vpn-lists.git
+cd vpn-lists
+python -m venv ../vpn-lists-venv
+../vpn-lists-venv/Scripts/python.exe -m pip install -r requirements.txt
+../vpn-lists-venv/Scripts/python.exe collector.py --check
+../vpn-lists-venv/Scripts/python.exe -m unittest discover -s tests -v
+../vpn-lists-venv/Scripts/python.exe tools/verify_bundle.py
+../vpn-lists-venv/Scripts/python.exe tools/prepare_restore.py ../vpn-lists-restore
+Get-Content ../vpn-lists-restore/RELEASE.txt
+Get-Content ../vpn-lists-restore/SHA512SUMS.txt | ForEach-Object {
+    $expected, $name = $_ -split '  ', 2
+    $actual = (Get-FileHash -Algorithm SHA512 -LiteralPath (Join-Path ../vpn-lists-restore $name)).Hash
+    if ($actual -ne $expected) { throw "SHA-512 mismatch: $name" }
+}
 ```
 
-Здесь `dry-run` без `=yes`. Первый вызов проверяет синтаксис, второй выполняет только вычисления и чтение свойств. Ожидается `PREFLIGHT OK`, running=true и единственный main-маршрут 8.8.8.8/32 через wg-awg-proxy-1. Любая ошибка — остановиться на этом этапе и прислать полный вывод. Она не требует отката: скрипт ничего не меняет.
+В Linux и macOS интерпретатор окружения находится в `../vpn-lists-venv/bin/python`. Генератор выбирает последний коммит, менявший `lists/` в текущем checkout. Для конкретной опубликованной версии укажите `--ref <полный-SHA-коммита>` и новую выходную папку. Генератор читает данные из Git-объектов и создаёт комплект только после проверки всего пакета. Исторический контрольный коммит — `48776515a376e2cdb9f706a7a2e28e059fc21401`. Для него начало SHA-512 пакета — `d188b9a4436f`. Штатный часовой Source на HOME-AX3 имеет следующий SHA-512.
 
-## 4. Установить пассивных кандидатов
-
-Только после успешного preflight и публикации bundle загрузить `router/install-candidates.rsc` в Files.
-
-```routeros
-/import file-name=install-candidates.rsc verbose=yes dry-run
-/import file-name=install-candidates.rsc
+```text
+445b66443cb56235bdd23c08d89dae6fbcaabdd95b7808be0ae7ec71e4193c8355e5e838d0f06ee81b6dc9e0f146919843ba9a42c929200bd66ffd69bd054af2
 ```
 
-Создаются vpn-lists-v2 и tunnel-watch-v4. Старые скрипты и scheduler не изменяются; новых scheduler установщик не создаёт. В v2 applyChanges=false, в v4 allowRecovery=false. При существующем кандидате установщик откажется от перезаписи. Если установка прервалась после первого add, проверить список скриптов; не удалять рабочие версии и не повторять установку вслепую.
+## 2. Зафиксировать исходное состояние
 
-Проверить пассивное выполнение, команды выполнять по одной:
+В локальном WinBox проверьте identity, расписание, скрипты, активные jobs и состояние туннеля. Запишите `disabled`, `on-event`, `interval`, `run-count`, `next-run` и хеш существующего Source. При наличии прежнего комплекта сохраните его `RELEASE.txt` и запустите его проверяющий скрипт, чтобы определить версию для отката. Снимите также фактические данные, включая ручные DNS-записи.
 
 ```routeros
+/system identity print
+/system resource print
+:foreach sid in=[/system script find] do={:put ([/system script get $sid name] . " owner=" . [/system script get $sid owner] . " policy=" . [/system script get $sid policy])}
+/system scheduler print detail without-paging
+/system script job print
+:foreach wid in=[/interface wireguard find] do={:put ([/interface wireguard get $wid name] . " running=" . [/interface wireguard get $wid running] . " mtu=" . [/interface wireguard get $wid mtu])}
+/ip route print detail where routing-table=to_vpn
+```
+
+Для существующего скрипта прочитайте контрольную сумму.
+
+```routeros
+:put [:convert [/system script get [find where name="vpn-lists-v2"] source] from=raw to=hex transform=sha512]
+```
+
+Выберите свободные имена файлов в Files и скачайте экспорты на ПК. Ниже приведён пример для первой копии.
+
+```routeros
+/system script export file=restore-before-scripts
+/system scheduler export file=restore-before-scheduler
+/ip firewall address-list export file=restore-before-addresses
+/ip dns static export file=restore-before-dns
+```
+
+Сохраните экспорты локально. Учитывайте, что Source других скриптов может содержать чувствительные строки. Если требуется только подтвердить исправную установку, переходите к проверке `verify-lan.rsc` из следующего раздела и к просмотру планового запуска из раздела 5.
+
+## 3. Проверить файлы на роутере и подготовить расписание
+
+Передайте в корень Files пять файлов из одного комплекта — `stage-lan.rsc`, `verify-lan.rsc`, `v2-dry-lan.txt`, `v2-once-lan.txt`, `v2-hourly-lan.txt`. Если в Files есть комплект предыдущей версии, сохраните его на ПК. Сравните все пять полных сумм со своим `SHA512SUMS.txt` перед первым импортом.
+
+```routeros
+:foreach f in={"stage-lan.rsc";"verify-lan.rsc";"v2-dry-lan.txt";"v2-once-lan.txt";"v2-hourly-lan.txt"} do={:put ($f . " " . [:convert [/file get $f contents] from=raw to=hex transform=sha512])}
+/import file-name=stage-lan.rsc verbose=yes dry-run
+/import file-name=verify-lan.rsc verbose=yes dry-run
+:put [:typeof [:parse [/file get v2-dry-lan.txt contents]]]
+```
+
+Ожидаются успешный синтаксический разбор и `code`. Для проверки уже работающего устройства выполните `/import file-name=verify-lan.rsc`. Он сравнит полный состав сетей и DNS, тип FWD, резолвер, список, включённое состояние, охват поддоменов и комментарии с коммитом из `RELEASE.txt`. На пустом устройстве совпадение ожидается после первого применения.
+
+Для восстановления остановите существующий `vpn-lists-hourly` на время работ. Если планировщик отсутствует, создайте его выключенным. Существующий объект с другим событием или интервалом сначала сопоставьте с сохранённой конфигурацией. Команды ниже сохраняют его свойства и права.
+
+```routeros
+{ :local s [/system scheduler find where name="vpn-lists-hourly"]; :if ([:len $s]=0) do={ /system scheduler add name=vpn-lists-hourly disabled=yes start-time=startup interval=1h on-event="/system script run vpn-lists-v2" policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon } else={ :if ([:len $s]!=1) do={:error "ambiguous scheduler"}; :if (([/system scheduler get $s on-event]!="/system script run vpn-lists-v2") || ([/system scheduler get $s interval]!=1h)) do={:error "review scheduler"}; /system scheduler disable $s } }
+/system script job print
+```
+
+Дождитесь завершения текущей job обновлятора. Проверьте, что других активных обработчиков, меняющих эти же таблицы, нет. При первой установке используйте учётную запись владельца. Политики новых объектов соответствуют проверенному профилю HOME-AX3.
+
+## 4. Пройти пробный запуск, применение и независимую сверку
+
+Выполняйте стадии отдельно. После каждого импорта установщика дождитесь `Installed Source stage=...`. Он проверяет имя устройства, выключенное расписание, отсутствие активного обновлятора, SHA-512 и синтаксис загруженного Source, затем перечитывает установленное значение. Если скрипт отсутствует, стадия `dry-lan` создаёт его. При неизвестном Source установка останавливается для сверки с резервной копией.
+
+```routeros
+:global vlAuditStage "dry-lan"
+/import file-name=stage-lan.rsc
 /system script run vpn-lists-v2
-/log print where message~"^vpn-lists-v2:"
-/system script run tunnel-watch-v4
-/log print where message~"^tunnel-watch-v4:"
+/log print where message~"vpn-lists-v2:"
 ```
 
-Ожидается `dry-run OK` у v2; у v4 — up/degraded при доступном туннеле. Никаких stop/start не будет. При ошибке сохранить вывод. `dry-run OK` не доказывает применение и откат — лишь готовность к следующему испытанию.
+Найдите свежую строку `dry-run OK`, сравните три количества и начало SHA-512 с `RELEASE.txt`. Пробный запуск проверяет пакет и конфликты владения до записи. При успехе установите закреплённый профиль применения.
 
-## 5. Включение применения v2 — отдельный контрольный этап
+```routeros
+:global vlAuditStage "once-lan"
+/import file-name=stage-lan.rsc
+/system script run vpn-lists-v2
+/log print where message~"vpn-lists-v2:"
+/import file-name=verify-lan.rsc
+:global vpnListsV2Version; :put $vpnListsV2Version
+:global vpnListsV2LastVerified; :put $vpnListsV2LastVerified
+:global vpnListsV2LastError; :put $vpnListsV2LastError
+```
 
-Этот этап выполнять после разбора результатов пункта 4. В WinBox открыть Source vpn-lists-v2 и заменить ТОЛЬКО `:local applyChanges false` на `:local applyChanges true`. Не делать массовые string-replace в терминале.
+Ожидаются свежая запись `reconciled`, `MATCH` с нужным commit и полным SHA-512, новый LastVerified, пустой LastError и Version из `RELEASE.txt`. Повторите запуск того же `once-lan` и проверку. Состав должен остаться тем же, время подтверждения обновится. При конфликте с ручной записью или смене политики домена разберите конкретное имя до следующего применения.
 
-Отключить legacy scheduler vpn-lists, дождаться завершения его jobs. Выполнить v2 один раз вручную. Проверить сообщение `reconciled`, counts 869/107/34 либо ожидаемые значения нового collect, свойства DNS и реальные сервисы. У v2 нет правила «90% достаточно».
+## 5. Вернуть часовую работу
 
-При ошибке rollback читать точный текст. Если rollback неполный — не включать автоматизацию, сначала проверить/восстановить конфигурацию. Если изменения не начинались или состояние подтверждённо восстановлено, оставить v2 без scheduler и вернуть legacy scheduler. У старого updater равенство версии не является repair-механизмом: включение старого scheduler само по себе не восстанавливает утраченные записи.
+```routeros
+:global vlAuditStage "hourly-lan"
+/import file-name=stage-lan.rsc
+:put [:convert [/system script get [find where name="vpn-lists-v2"] source] from=raw to=hex transform=sha512]
+```
 
-После успешного применения в существующем scheduler vpn-lists изменить только on-event на `/system script run vpn-lists-v2`, сохранив интервал 1h и существующие права, затем включить его. В v2 проверка legacy scheduler рассчитана на name=vpn-lists с прежним on-event: обновлённый scheduler допустим. Проверить повторный ручной запуск с прежним bundle: он должен выполнить сверку без массового изменения комментариев. Затем проверить запуск scheduler.
+Сверьте хеш с `v2-hourly-lan.txt` в `SHA512SUMS.txt`. Для рабочего ежечасного режима включите планировщик и запишите его счётчик и следующий запуск. При восстановлении намеренно приостановленного обслуживания сохраните согласованное состояние расписания.
 
-## 6. Переключение watchdog v4 — отдельно от обновлятора
+```routeros
+/system scheduler enable [find where name="vpn-lists-hourly"]
+/system scheduler print detail where name="vpn-lists-hourly"
+```
 
-Не менять два компонента одновременно. После проверки v2 и пассивного v4:
+Дождитесь следующего естественного запуска без ручного вызова. Проверьте прирост run-count, свежую строку `reconciled`, LastCheck, LastVerified, LastError и Version. Снова выполните `verify-lan.rsc`. Если за это время `main` получила другой пакет, обновите чистый клон через `git pull --ff-only`, подготовьте новый комплект и передайте только новый проверяющий файл после сверки SHA-512. Итоговые ожидания возьмите из нового `RELEASE.txt`.
 
-- Отключить scheduler tunnel-watch-v3, дождаться завершения job.
-- В Source v4 изменить allowRecovery=false на true.
-- Проверить обычный запуск, затем в согласованное окно — остановленный контейнер и восстановление. Для обычного повторного отказа start действует интервал 2 минуты; не сбрасывать эти ограничения в рабочей эксплуатации.
-- После успешного теста изменить существующий scheduler tunnel-watch-v3: on-event `/system script run tunnel-watch-v4`, interval=1m; имя можно сохранить, но комментарий обновить. Старый Source v3 оставить для отката.
-- После включения проверить RUN-COUNT, новые логи и отсутствие одновременных старых watchdog.
+Клиентская проверка с LAN охватывает A-запросы к `router.lan` и публичному имени по UDP и TCP через `192.168.13.1`, `1.1.1.1` и `8.8.8.8`. Для Autodesk проверьте новый HTTPS-сеанс к `efulfillment.autodesk.com`, метку `to_vpn` и двусторонний трафик того же соединения на `wg-vps0`. Приложение может отдельно требовать действительную ссылку на файл.
 
-Откат: отключить scheduler v4/изменённый scheduler, вернуть on-event на `/system script run tunnel-watch-v3`, включить его. Если контейнер остановлен, запустить вручную. Старые awg-watchdog и tunnel-watch одновременно с v3/v4 не включать.
+## Если проверка не прошла
 
-## 7. Что этот выпуск не меняет и что ещё проверить
+Оставьте планировщик выключенным, зафиксируйте фазу в журнале, LastError и состояние job. До изменения таблиц достаточно восстановить прежний проверенный Source и состояние расписания. После изменения данных сравните обе таблицы с исходными экспортами и закреплённым пакетом. Скрипт выполняет компенсирующие операции при ошибке; прерывание питания и сообщение `ROLLBACK INCOMPLETE` требуют проверки фактического состояния.
 
-- Firewall/mangle/DNS redirect: отдельный клиентский тест UDP/TCP 53 к 192.168.13.1, 8.8.8.8 и 1.1.1.1.
-- Холодный старт: доступ к raw.githubusercontent.com без предварительного клиентского DNS-запроса, затем обновление после reboot.
-- Shared CDN-IP и DoH/Private DNS; строгий VPN-режим для устройств требует отдельной конфигурации.
-- Настоящий WAN outage и восстановление, зависший RUNNING-контейнер, граница stop timeout, ошибка start, MTU/QUIC.
-- Дополнительные независимые VPN-probe требуют проверенных маршрутов и пока не установлены.
-- Переживание отключения питания: компенсирующий rollback v2 хранится в RAM, не является журналируемой транзакцией.
-- Права скриптов, VLAN/изоляция, независимый мониторинг свежести и резервный VPS — следующие этапы.
-
-Ни один Python-тест не является доказательством правильной работы новых RouterOS-команд. До runtime-проверок оба новых скрипта остаются кандидатами.
+Для возврата данных подготовьте отдельный комплект с `--ref` исходного опубликованного коммита. Если в скрипте остался закреплённый профиль нового комплекта, сначала верните им известный обоим комплектам `hourly-lan` при выключенном scheduler, без запуска. Затем загрузите старый комплект, сверьте суммы и пройдите dry, once и verify. Включайте часовой профиль, когда актуальный пакет в `main` снова пригоден для применения. Экспорт с командами `add` поверх заполненных таблиц может создавать дубликаты. Неизвестный Source, ручные записи и незавершённый откат сверяйте по сохранённым объектам.

@@ -1,0 +1,38 @@
+# Generated against one immutable commit. Read-only verification of both managed tables.
+{
+    :local ref "@COMMIT@"
+    :local expected "@PAYLOAD_SHA512@"
+    :local releaseUrl ("https://raw.githubusercontent.com/RokudoFran/vpn-lists/" . $ref . "/lists/bundle.json")
+    :local reply [/tool fetch url=$releaseUrl src-address=192.168.13.1 check-certificate=yes-without-crl output=user as-value]
+    :if (($reply->"status") != "finished") do={ :error "verification fetch failed" }
+    :local wrapper [:deserialize from=json value=($reply->"data") options=json.no-string-conversion]
+    :local payload ($wrapper->"payload")
+    :if ((($wrapper->"schema") != 1) || (($wrapper->"sha512") != $expected) || ([:convert $payload from=raw to=hex transform=sha512] != $expected)) do={ :error "unexpected reference bundle" }
+    :local data [:deserialize from=json value=$payload options=json.no-string-conversion]
+    :local seen ({})
+    :foreach rid in=[/ip firewall address-list find where list="vpn_git"] do={
+        :local net [:tostr [/ip firewall address-list get $rid address]]
+        :if (([/ip firewall address-list get $rid comment] != "git") || [/ip firewall address-list get $rid disabled] || [/ip firewall address-list get $rid dynamic]) do={ :error ("unexpected network ownership/state " . $net) }
+        :if (($seen->$net) = true) do={ :error ("duplicate network " . $net) }
+        :set ($seen->$net) true
+    }
+    :if ([:len $seen] != [:len ($data->"vpn_ipv4.txt")]) do={ :error "network count differs" }
+    :foreach net in=($data->"vpn_ipv4.txt") do={
+        :if (($seen->$net) != true) do={ :error ("missing network " . $net) }
+    }
+    :local dnsTotal 0
+    :foreach kind in={"domains_vpn.txt";"domains_direct.txt"} do={
+        :local wantedList "vpn_dns"
+        :local wantedResolver "8.8.8.8"
+        :if ($kind = "domains_direct.txt") do={ :set wantedList "no_vpn"; :set wantedResolver "77.88.8.8" }
+        :foreach domain in=($data->$kind) do={
+            :local ids [/ip dns static find where name=$domain]
+            :if ([:len $ids] != 1) do={ :error ("missing/ambiguous DNS " . $domain) }
+            :local rid [:pick $ids 0]
+            :if (([/ip dns static get $rid comment] != "git-dns") || ([/ip dns static get $rid type] != "FWD") || ([/ip dns static get $rid address-list] != $wantedList) || ([:tostr [/ip dns static get $rid forward-to]] != $wantedResolver) || [/ip dns static get $rid disabled] || (![/ip dns static get $rid match-subdomain])) do={ :error ("unexpected DNS properties " . $domain) }
+            :set dnsTotal ($dnsTotal + 1)
+        }
+    }
+    :if ([:len [/ip dns static find where comment="git-dns"]] != $dnsTotal) do={ :error "extra managed DNS records" }
+    :put ("MATCH release=" . $ref . " networks=" . [:len $seen] . " dns=" . $dnsTotal . " sha512=" . $expected)
+}
