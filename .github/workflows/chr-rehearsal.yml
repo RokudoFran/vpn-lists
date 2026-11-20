@@ -1,0 +1,46 @@
+name: CHR scheduled restore
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    name: Restore on CHR 7.25.1 and verify the first hourly run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install QEMU and SSH client
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 seabios
+          python -m pip install 'paramiko==5.1.0'
+
+      - name: Wait for the CHR scheduler and compare with Git
+        timeout-minutes: 90
+        run: |
+          mkdir chr-evidence
+          python -u tools/rehearse_chr.py chr-evidence/guest 2>&1 | tee chr-evidence/rehearsal.log
+
+      - name: Save rehearsal logs and verification tables
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chr-7.25.1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: chr-evidence/
+          if-no-files-found: warn
+          retention-days: 30

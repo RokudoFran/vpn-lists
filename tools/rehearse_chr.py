@@ -351,6 +351,10 @@ def main():
             state, log = wait_for_schedule(connect, baseline, (OSError, EOFError, paramiko.SSHException))
             final = observed_release(kit, state["version"])
             with closing(connect()) as ssh:
+                journal = run(ssh, ':foreach id in=[/log find where topics~"script" and message~"^vpn-lists-v2:"] '
+                                   'do={:put ([/log get $id time] . " " . [/log get $id message])}')
+                require(journal and log.split("|", 2)[2] in journal, "Scheduled entry missing from CHR log")
+                (output / "routeros.log").write_text(journal + "\n", encoding="utf-8")
                 if final != kit:
                     upload(ssh, final, "verify-lan.rsc")
                 counts = verify_tables(ssh, final, output)
