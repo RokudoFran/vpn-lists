@@ -76,14 +76,14 @@ def initialize_console(console, password):
     send("admin+ct")
     expect(rb"Password:")
     send("")
-    prompt = rb"\[y/n\]|new password\s*:|\[admin@CHR\]\s*>"
+    prompt = rb"\[y/n\]|new password\s*[:>]|\[admin@CHR\]\s*>"
     answer = expect(prompt)
     if answer == b"[y/n]":
         send("n")
         answer = expect(prompt)
     if b"new password" in answer:
         send(password)
-        expect(rb"(repeat|confirm)[^:\r\n]*password[^:\r\n]*:")
+        expect(rb"(repeat|confirm)[^:>\r\n]*password\s*[:>]")
         send(password)
     else:
         send('/user set admin password="' + password + '"')
@@ -156,6 +156,7 @@ def upload(ssh, kit, name):
 
 
 def stage(ssh, kit, name):
+    print(f"Installing {name}", flush=True)
     result = run(ssh, f':global vlAuditStage "{name}"; /import file-name=stage-lan.rsc')
     require(f"Installed Source stage={name};" in result, f"Stage failed: {result}")
     digest = run(ssh, ':put [:convert [/system script get [find where name="vpn-lists-v2"] source] '
@@ -218,6 +219,7 @@ def install(ssh, kit):
             f"Unexpected guest: {device}")
     for menu in ("/system script", "/system scheduler", "/ip firewall address-list", "/ip dns static"):
         require(run(ssh, f":put [:len [{menu} find]]") == "0", f"Guest already has entries in {menu}")
+    print(f"Verified empty guest: {device}", flush=True)
     for command in [
         "/system identity set name=HOME-AX3", "/interface bridge add name=bridge",
         "/ip address add address=192.168.13.1/24 interface=bridge",
@@ -238,12 +240,13 @@ def install(ssh, kit):
     stage(ssh, kit, "once-lan")
     _, digest = release(kit)
     previous = ""
-    for _ in range(2):
+    for attempt in (1, 2):
         run(ssh, RUN)
         state = status(ssh)
         require(state["version"] == digest and not state["error"] and state["last_verified"] > previous,
                 f"Pinned application did not complete: {state}")
         verify_tables(ssh, kit, None)
+        print(f"Pinned application {attempt}: Git tables match", flush=True)
         previous = state["last_verified"]
     stage(ssh, kit, "hourly-lan")
     require(run(ssh, f":put [/system scheduler get {SCHEDULE} run-count]") == "0", "Scheduler already ran")
@@ -329,7 +332,18 @@ def main():
                     client.close()
                     raise
 
-            with closing(connect()) as ssh:
+            # On first boot the console can become ready before DHCP and sshd.
+            for attempt in range(12):
+                try:
+                    ssh = connect()
+                    break
+                except paramiko.AuthenticationException:
+                    raise
+                except (OSError, EOFError, paramiko.SSHException):
+                    if attempt == 11:
+                        raise
+                    time.sleep(2)
+            with closing(ssh):
                 baseline = install(ssh, kit)
             (output / "before.json").write_text(json.dumps(baseline, indent=2), encoding="utf-8")
             state, log = wait_for_schedule(connect, baseline, (OSError, EOFError, paramiko.SSHException))
