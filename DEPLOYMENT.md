@@ -6,7 +6,7 @@
 
 Для проверки одного обновлятора достаточно ПК с Git, Python 3.12, QEMU x86-64 с поддержкой пользовательской сети (SLIRP), 1 ГиБ свободной памяти для гостя и доступом по HTTPS к MikroTik и GitHub. Добавьте `qemu-system-x86_64` в PATH. Для Windows доступны сборки по ссылке с сайта QEMU. [Установка CHR](https://manual.mikrotik.com/docs/getting-started/installation-and-upgrade/install/chr-installation/) · [Загрузка QEMU](https://www.qemu.org/download/)
 
-В PowerShell из новой папки выполните:
+Откройте PowerShell в новой папке и выполните этот блок.
 
 ```powershell
 git clone https://github.com/RokudoFran/vpn-lists.git

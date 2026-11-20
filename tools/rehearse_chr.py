@@ -250,7 +250,8 @@ def install(ssh, kit):
         previous = state["last_verified"]
     stage(ssh, kit, "hourly-lan")
     require(run(ssh, f":put [/system scheduler get {SCHEDULE} run-count]") == "0", "Scheduler already ran")
-    baseline = {"status": state, "log": last_log(ssh, "reconciled")}
+    baseline = {"guest": device, "run_count_before_enable": 0,
+                "status": state, "log": last_log(ssh, "reconciled")}
     require(baseline["log"], "Missing reconciliation log before enabling scheduler")
     run(ssh, f"/system scheduler enable {SCHEDULE}")
     baseline["scheduler"] = run(ssh, '/system scheduler print detail where name="vpn-lists-hourly"')
@@ -310,6 +311,7 @@ def main():
     import paramiko
     executable = shutil.which(args.qemu)
     require(executable, f"QEMU not found: {args.qemu}")
+    executable = str(Path(executable).resolve())
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     with tempfile.TemporaryDirectory() as temp:
@@ -352,12 +354,12 @@ def main():
                 if final != kit:
                     upload(ssh, final, "verify-lan.rsc")
                 counts = verify_tables(ssh, final, output)
-                require(run(ssh, f":put [/system scheduler get {SCHEDULE} run-count]") == "1",
-                        "Scheduler ran again during verification")
+                scheduler = run(ssh, '/system scheduler print detail where name="vpn-lists-hourly"')
+                require(re.search(r"\brun-count=1\b", scheduler), "Scheduler ran again during verification")
             commit, digest = release(final)
             result = {"result": "PASS", "observed_utc": utc_now(), "checkout": git("rev-parse", "HEAD").decode().strip(),
                       "pinned_commit": release(kit)[0], "scheduled_commit": commit, "sha512": digest,
-                      "scheduler_count": 1, "status": state, "log": log, "counts": counts}
+                      "scheduler_count": 1, "scheduler": scheduler, "status": state, "log": log, "counts": counts}
             (output / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
             print(f"PASS {commit} {counts}", flush=True)
 
