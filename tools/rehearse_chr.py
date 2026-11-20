@@ -5,6 +5,7 @@ from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import secrets
@@ -51,10 +52,15 @@ def extract_image(directory, archive):
 
 
 def initialize_console(console, password):
-    def expect(pattern, timeout=90):
+    def expect(pattern, timeout=90, first_login=False):
         deadline = time.monotonic() + timeout
+        next_prompt = time.monotonic() + 10
         received = b""
         while time.monotonic() < deadline:
+            if first_login and time.monotonic() >= next_prompt:
+                # A return sent before RouterOS opens its UART can be lost.
+                console.sendall(b"\r")
+                next_prompt = time.monotonic() + 10
             try:
                 chunk = console.recv(8192)
             except socket.timeout:
@@ -65,14 +71,16 @@ def initialize_console(console, password):
             match = re.search(pattern, plain, re.I)
             if match:
                 return match.group().lower()
-        raise RuntimeError(f"CHR serial console timed out waiting for {pattern!r}")
+        # Only the initial boot transcript is safe to include in diagnostics.
+        tail = f"; boot output: {received[-1200:]!r}" if first_login else ""
+        raise RuntimeError(f"CHR serial console timed out waiting for {pattern!r}{tail}")
 
     def send(line):
         console.sendall(line.encode("ascii") + b"\r")
 
     console.settimeout(1)
     send("")
-    expect(rb"CHR Login:")
+    expect(rb"CHR\s+Login:", timeout=240, first_login=True)
     send("admin+ct")
     expect(rb"Password:")
     send("")
@@ -100,7 +108,10 @@ def virtual_machine(directory, executable, error_log):
         serial.settimeout(1)
         reserve.bind(("127.0.0.1", 0))
         port = reserve.getsockname()[1]
-        args = [executable, "-machine", "pc,accel=tcg", "-cpu", "max", "-m", "1024",
+        kvm = sys.platform == "linux" and os.access("/dev/kvm", os.R_OK | os.W_OK)
+        accelerator, cpu = ("kvm", "host") if kvm else ("tcg", "max")
+        print(f"Booting CHR with QEMU ({accelerator})", flush=True)
+        args = [executable, "-machine", f"pc,accel={accelerator}", "-cpu", cpu, "-m", "1024",
                 "-smp", "2", "-display", "none", "-monitor", "none", "-no-reboot",
                 "-rtc", "base=utc", "-drive", f"file={IMAGE},format=raw,if=virtio",
                 "-serial", f"tcp:127.0.0.1:{serial.getsockname()[1]}",

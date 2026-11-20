@@ -27,7 +27,8 @@ jobs:
       - name: Install QEMU and SSH client
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 seabios
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 seabios acl
+          if [[ -c /dev/kvm ]]; then sudo setfacl -m "u:$(id -un):rw" /dev/kvm; fi
           python -m pip install 'paramiko==5.1.0'
 
       - name: Wait for the CHR scheduler and compare with Git
