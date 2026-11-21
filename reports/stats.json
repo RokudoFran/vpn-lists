@@ -1,5 +1,5 @@
 {
-  "addresses": 23327601,
+  "addresses": 23327600,
   "addresses_by_source": {
     "akamai:AS16625": 4124160,
     "akamai:AS20940": 13880000,
@@ -9,7 +9,7 @@
     "cloudflare:cloudflare": 1524736,
     "cloudflare:prefixes": 256,
     "discord:prefixes": 16384,
-    "gcore:AS199524": 121090,
+    "gcore:AS199524": 121089,
     "google:AS15169": 2640128,
     "google:AS19527": 1824512,
     "google:AS36040": 21760,
@@ -29,7 +29,7 @@
     "x_twitter:AS35995": 2560
   },
   "direct_domains": 34,
-  "prefixes": 867,
+  "prefixes": 866,
   "ripe_window_days": 14,
   "source_networks": {
     "akamai:AS16625": [
@@ -2073,7 +2073,6 @@
       "93.114.68.0/24",
       "93.114.98.0/24",
       "93.115.241.0/24",
-      "93.119.169.111/32",
       "93.119.170.0/24",
       "93.123.11.0/24",
       "93.123.17.0/24",
@@ -2506,20 +2505,20 @@
   },
   "sources": {
     "akamai:AS16625": 1810,
-    "akamai:AS20940": 3951,
+    "akamai:AS20940": 3942,
     "anthropic:AS399358": 1,
     "anthropic:AS60808": 1,
     "aws_cloudfront:cloudfront": 217,
     "cloudflare:cloudflare": 15,
     "cloudflare:prefixes": 1,
     "discord:prefixes": 1,
-    "gcore:AS199524": 455,
-    "google:AS15169": 1273,
+    "gcore:AS199524": 453,
+    "google:AS15169": 1274,
     "google:AS19527": 261,
     "google:AS36040": 84,
-    "google:AS43515": 193,
+    "google:AS43515": 194,
     "linkedin:AS14413": 23,
-    "meta:AS32934": 234,
+    "meta:AS32934": 239,
     "meta:AS54115": 11,
     "netflix:AS2906": 253,
     "roblox:AS22697": 46,
