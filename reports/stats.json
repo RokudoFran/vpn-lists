@@ -2489,7 +2489,7 @@
   },
   "sources": {
     "akamai:AS16625": 1793,
-    "akamai:AS20940": 3945,
+    "akamai:AS20940": 3946,
     "anthropic:AS399358": 1,
     "anthropic:AS60808": 1,
     "aws_cloudfront:cloudfront": 217,
@@ -2502,7 +2502,7 @@
     "google:AS36040": 84,
     "google:AS43515": 193,
     "linkedin:AS14413": 23,
-    "meta:AS32934": 239,
+    "meta:AS32934": 238,
     "meta:AS54115": 11,
     "netflix:AS2906": 252,
     "roblox:AS22697": 47,
