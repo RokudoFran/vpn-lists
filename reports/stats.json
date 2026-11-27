@@ -2489,7 +2489,7 @@
   },
   "sources": {
     "akamai:AS16625": 1793,
-    "akamai:AS20940": 3946,
+    "akamai:AS20940": 3943,
     "anthropic:AS399358": 1,
     "anthropic:AS60808": 1,
     "aws_cloudfront:cloudfront": 217,
@@ -2497,7 +2497,7 @@
     "cloudflare:prefixes": 1,
     "discord:prefixes": 1,
     "gcore:AS199524": 451,
-    "google:AS15169": 1274,
+    "google:AS15169": 1272,
     "google:AS19527": 270,
     "google:AS36040": 84,
     "google:AS43515": 193,
